@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>SepehrSky OS 26 Ultra</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--primary:#00f2fe;--glow:rgba(0,242,254,.35);--bg:#020408;--glass:rgba(18,24,38,.72);--border:rgba(255,255,255,.13);--blur:blur(28px);--sans:"Plus Jakarta Sans","Vazirmatn",sans-serif;--mono:"JetBrains Mono",monospace;--dir-text-align:right;--flex-direction-reverse:row-reverse;--ease:cubic-bezier(.16,1,.3,1)}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--sans);user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+body{display:grid;place-items:center;color:#fff;background:radial-gradient(circle at 10% 10%,#00f2fe18,transparent 45%),radial-gradient(circle at 90% 90%,#8b5cf618,transparent 45%)}
+button,input,textarea{font:inherit}button{cursor:pointer}
+.hidden{display:none!important}
+#phone-container{position:relative;width:100%;height:100%;max-width:430px;max-height:910px;overflow:hidden;background:linear-gradient(145deg,#080b13,#020408);box-shadow:0 30px 100px #000,0 0 0 1px #ffffff1c,0 0 0 12px #161b26}
+@media(min-width:480px){#phone-container{height:96vh;border-radius:54px}}
+#home-screen{position:absolute;inset:0;padding:70px 20px 80px;display:flex;flex-direction:column;justify-content:space-between;background:radial-gradient(circle at 50% 0,#17153b,#030712 65%);background-size:cover;background-position:center}
+.status-bar{position:absolute;top:0;inset-inline:0;height:48px;padding:0 26px;display:flex;justify-content:space-between;align-items:center;z-index:8000;font-size:12px;font-weight:700}
+.dynamic-island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:126px;height:33px;border-radius:24px;background:#000;z-index:9001;border:1px solid #fff1;display:flex;align-items:center;padding:0 13px;transition:.4s var(--ease)}
+.dynamic-island.expanded{width:345px;height:112px;border-color:var(--primary);background:#0b1019f5;backdrop-filter:var(--blur);flex-direction:column;justify-content:center;gap:9px}
+#control-center{position:absolute;inset:0 0 auto;height:86%;z-index:8500;padding:68px 18px 24px;background:#0b0f17f5;backdrop-filter:var(--blur);transform:translateY(-105%);transition:.45s var(--ease);border-radius:0 0 35px 35px}
+#control-center.active{transform:none}
+.cc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.cc-card{min-height:92px;padding:15px;border-radius:24px;background:#ffffff0b;border:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.cc-card.active{background:linear-gradient(135deg,var(--primary),#5270ff);color:#06101a}
+.edge-handle{position:absolute;top:40%;inset-inline-end:0;width:6px;height:90px;background:var(--primary);border-radius:10px 0 0 10px;z-index:7000;box-shadow:0 0 14px var(--glow)}
+#edge-panel{position:absolute;top:18%;inset-inline-end:-265px;width:245px;z-index:7500;padding:20px;border-radius:30px 0 0 30px;background:#0a0f1af5;backdrop-filter:var(--blur);border:1px solid var(--border);transition:inset-inline-end .45s var(--ease);display:flex;flex-direction:column;gap:10px}
+[dir=rtl] #edge-panel{inset-inline-start:-265px;inset-inline-end:auto;border-radius:0 30px 30px 0}
+#edge-panel.active{inset-inline-end:0}[dir=rtl] #edge-panel.active{inset-inline-end:auto;inset-inline-start:0}
+.edge-btn{padding:13px;border-radius:16px;background:#ffffff08;color:#fff;border:1px solid #fff1;text-align:start}
+#desktop-pages{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;max-height:55vh}
+#desktop-pages::-webkit-scrollbar{display:none}
+.app-page{min-width:100%;scroll-snap-align:start;display:grid;grid-template-columns:repeat(4,1fr);gap:20px 12px}
+.app-item{text-align:center}.app-icon{width:60px;height:60px;margin:auto;border-radius:21px;display:grid;place-items:center;font-size:25px;box-shadow:0 12px 28px #0008;border:1px solid #fff2}.app-label{font-size:10px;font-weight:600;margin-top:6px}
+.page-indicator{display:flex;justify-content:center;gap:6px;margin:8px}.page-dot{width:6px;height:6px;border-radius:50%;background:#fff4}.page-dot.active{width:18px;background:var(--primary);box-shadow:0 0 8px var(--glow)}
+.dock-bar{display:flex;justify-content:space-between;padding:10px 18px;border-radius:35px;background:#ffffff0d;border:1px solid #fff2;backdrop-filter:var(--blur)}
+.nav-bar{position:absolute;bottom:0;inset-inline:0;height:50px;z-index:7000;display:flex;justify-space-around:align-items:center;background:#04070ff5;border-top:1px solid var(--border)}
+.nav-btn{padding:12px 30px;color:#fff9;font-size:18px}
+#app-container{position:absolute;inset:48px 0 50px;z-index:5000;pointer-events:none}
+.app-window{position:absolute;width:min(88%,390px);height:min(78%,650px);top:6%;left:6%;display:flex;flex-direction:column;background:#080d16f7;border:1px solid #fff2;border-radius:25px;overflow:hidden;box-shadow:0 25px 70px #000b;pointer-events:auto;animation:win .3s var(--ease)}
+.app-window.maximized{inset:0!important;width:100%!important;height:100%!important;border-radius:0}
+.app-window.minimized{display:none}
+@keyframes win{from{opacity:0;transform:scale(.9) translateY(20px)}to{opacity:1;transform:none}}
+.app-header{height:58px;flex:none;padding:0 16px;display:flex;align-items:center;justify-content:space-between;background:#0d121ef7;border-bottom:1px solid var(--border);font-weight:700;direction:ltr}
+.app-header .title{display:flex;align-items:center;gap:9px}
+[dir=rtl] .app-header .title{direction:rtl}
+.win-controls{display:flex;gap:6px}.win-controls button{width:31px;height:31px;border:0;border-radius:10px;background:#ffffff0b;color:#fff}
+.app-body{flex:1;overflow:auto;padding:16px;color:#fff}
+.task-overlay{position:absolute;inset:0;z-index:9200;background:#020408eF;backdrop-filter:blur(22px);padding:55px 16px 65px}
+.task-cards{display:flex;gap:12px;overflow-x:auto;padding:12px 0 25px}.task-card{min-width:190px;background:#ffffff0b;border:1px solid #fff2;border-radius:22px;padding:12px}
+.task-thumb{height:150px;border-radius:16px;background:linear-gradient(145deg,#182238,#070a11);display:grid;place-items:center;font-size:42px;color:var(--primary);margin:8px 0}
+.setup{position:absolute;inset:0;z-index:100000;background:linear-gradient(145deg,#050812f8,#020408);backdrop-filter:blur(25px);display:grid;place-items:center;padding:20px}
+.setup-card{width:min(390px,94%);max-height:90%;overflow:auto;padding:25px;border-radius:32px;background:#ffffff0c;border:1px solid #fff2;box-shadow:0 30px 90px #000;direction:inherit}
+.setup-step{display:none;animation:slide .35s var(--ease)}.setup-step.active{display:block}@keyframes slide{from{opacity:0;transform:translateX(25px)}to{opacity:1;transform:none}}
+.setup h1{font-size:25px;margin-bottom:8px}.muted{opacity:.65;font-size:12px;line-height:1.8}.field{margin-top:14px}.field label{display:block;font-size:11px;opacity:.7;margin-bottom:6px}.field input,.field select,.field textarea{width:100%;padding:12px;border-radius:15px;border:1px solid #fff2;background:#0006;color:#fff;outline:none}
+.options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.option{padding:14px;border:1px solid #fff2;border-radius:18px;background:#ffffff08;text-align:center}.option.active{border-color:var(--primary);box-shadow:0 0 20px var(--glow)}
+.setup-actions{display:flex;justify-content:space-between;margin-top:22px}.primary{border:0;border-radius:15px;padding:12px 18px;background:var(--primary);color:#001015;font-weight:800}.secondary{border:1px solid #fff2;border-radius:15px;padding:12px 18px;background:#fff1;color:#fff}
+.progress{height:8px;border-radius:10px;background:#fff1;overflow:hidden;margin:16px 0}.progress i{display:block;height:100%;width:0;background:var(--primary);transition:.4s}.logs{font:11px var(--mono);line-height:2;color:#8deaff;min-height:90px}
+#lock-screen{position:absolute;inset:0;z-index:9000;background:linear-gradient(#0004,#0009),radial-gradient(circle at 50% 0,#6680ff88,transparent 38%),#080b12;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:90px 25px 70px;transition:.5s var(--ease)}
+#lock-screen.unlocked{transform:translateY(-100%)}
+.pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;width:300px}.pinpad button{height:52px;border-radius:18px;border:1px solid #fff1;background:#fff1;color:#fff;font-size:20px}.pin-dots{display:flex;justify-content:center;gap:9px;margin:12px}.pin-dots i{width:9px;height:9px;border:1px solid #fff;border-radius:50%}.pin-dots i.fill{background:#fff}
+.overlay-screen{position:absolute;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;padding:25px;color:#fff;overflow:auto}
+.rec-btn{width:100%;padding:13px;margin:5px 0;background:#11190c;color:#a3e635;border:1px solid #3f6212;border-radius:13px;text-align:start}
+#toast-container{position:absolute;bottom:62px;left:50%;transform:translateX(-50%);z-index:120000;display:flex;flex-direction:column;gap:8px}.toast{padding:10px 18px;border-radius:30px;background:#000e;border:1px solid #fff2;font-size:12px;white-space:nowrap}
+.card{padding:14px;margin:8px 0;border-radius:18px;background:#ffffff08;border:1px solid #fff1}
+.piano-keyboard{display:flex;height:180px;gap:3px;margin-top:25px}.piano-key{flex:1;background:#fff;color:#111;border-radius:0 0 10px 10px;display:flex;align-items:end;justify-content:center;padding-bottom:8px}.piano-key.black{background:#111827;color:#fff;height:60%;margin:0 -15px;z-index:2}
+.term{font:13px var(--mono);color:#4ddfff;white-space:pre-wrap}.term-input{background:transparent;border:0;outline:0;color:#fff;flex:1;font:13px var(--mono)}
+
+/* ===== SepehrSky 30s Boot Animation ===== */
+#boot-sequence,#shutdown-sequence{
+ position:absolute;inset:0;z-index:200000;background:#000;display:grid;
+ place-items:center;overflow:hidden;opacity:1;transition:opacity .7s ease
+}
+#boot-sequence.hidden,#shutdown-sequence.hidden{display:none}
+.boot-core{
+ text-align:center;display:flex;flex-direction:column;align-items:center;
+ justify-content:center;min-height:100%;width:100%
+}
+.boot-s,.boot-word,.boot-powered,.boot-final{position:absolute;opacity:0;color:#fff}
+.boot-s,.boot-final{
+ font:900 112px/1 var(--sans);
+ text-shadow:0 0 18px var(--primary),0 0 55px var(--glow)
+}
+.boot-word{
+ font:900 48px/1 var(--sans);letter-spacing:2px;
+ text-shadow:0 0 18px var(--primary),0 0 45px var(--glow)
+}
+.boot-word .accent{color:var(--primary)}
+.boot-powered{
+ margin-top:145px;font:600 12px/1.6 var(--sans);
+ letter-spacing:1.5px;color:#fff
+}
+.boot-s{animation:sepehrBootS 30s linear forwards}
+.boot-word{animation:sepehrBootWord 30s linear forwards}
+.boot-final{animation:sepehrBootFinal 30s linear forwards}
+.boot-powered{animation:sepehrBootPowered 30s linear forwards}
+.boot-loader{
+ position:absolute;bottom:12%;width:150px;height:3px;background:#fff1;
+ border-radius:99px;overflow:hidden
+}
+.boot-loader i{
+ display:block;width:0;height:100%;background:var(--primary);
+ box-shadow:0 0 12px var(--glow);animation:sepehrBootLoader 30s linear forwards
+}
+
+/* 0–10s: S | 10–20s: SepehrSky | 20–30s: S + Powered by */
+@keyframes sepehrBootS{
+ 0%,33.333%{opacity:1;transform:scale(1) rotate(0deg)}
+ 33.334%,100%{opacity:0;transform:scale(.65) rotate(720deg)}
+}
+@keyframes sepehrBootWord{
+ 0%,33.333%{opacity:0;transform:scale(.72)}
+ 34%,36%{opacity:1;transform:scale(1.08)}
+ 36.001%,66.666%{opacity:1;transform:scale(1)}
+ 66.667%,100%{opacity:0;transform:scale(1.12)}
+}
+@keyframes sepehrBootFinal{
+ 0%,66.666%{opacity:0;transform:scale(.55) rotate(-360deg)}
+ 66.667%,69%{opacity:1;transform:scale(1.12) rotate(0)}
+ 69.001%,99%{opacity:1;transform:scale(1) rotate(0)}
+ 99.001%,100%{opacity:0;transform:scale(.55)}
+}
+@keyframes sepehrBootPowered{
+ 0%,66.666%{opacity:0;transform:translateY(10px)}
+ 66.667%,69%{opacity:1;transform:translateY(0)}
+ 69.001%,99%{opacity:1;transform:translateY(0)}
+ 99.001%,100%{opacity:0}
+}
+@keyframes sepehrBootLoader{to{width:100%}}
+
+.shutdown-word{
+ font:900 48px/1 var(--sans);letter-spacing:3px;color:#fff;
+ text-shadow:0 0 20px var(--primary),0 0 55px var(--glow);
+ animation:shutdown 2.2s ease forwards
+}
+.shutdown-sub{font:500 11px var(--sans);color:#fff8;opacity:0;animation:fadeSub .7s .35s forwards}
+@keyframes shutdown{
+ 0%{opacity:0;transform:scale(1.25)}
+ 20%{opacity:1;transform:scale(1)}
+ 75%{opacity:1}
+ 100%{opacity:0;transform:scale(.72)}
+}
+@keyframes fadeSub{to{opacity:1}}
+</style>
+</head>
+<body>
+<div id="boot-sequence"><div class="boot-core"><div class="boot-s">S</div><div class="boot-word"><span class="accent">Sepehr</span>Sky</div><div class="boot-powered">Powered by SepehrStudio</div><div class="boot-final">S</div></div><div class="boot-loader"><i></i></div></div>
+<div id="shutdown-sequence" class="hidden"><div class="boot-core"><div class="shutdown-word">SepehrSky</div><div class="shutdown-sub">Shutting down</div></div></div>
+<div id="phone-container">
+<div id="setup-wizard-overlay" class="setup hidden">
+ <div class="setup-card">
+  <div id="setup1" class="setup-step active"><h1>SepehrSky OS</h1><p class="muted">Welcome to your first-boot experience.</p><div class="options"><div class="option active" onclick="chooseLocale('fa',this)">🇮🇷<br>فارسی<br><small>RTL</small></div><div class="option" onclick="chooseLocale('en',this)">🇬🇧<br>English<br><small>LTR</small></div></div></div>
+  <div id="setup2" class="setup-step"><h1 data-i18n="personal">Personalization</h1><p class="muted">Configure your virtual device identity.</p><div class="field"><label>User Name</label><input id="setup-name" placeholder="Sepehr"></div><div class="field"><label>Device Hostname</label><input id="setup-host" placeholder="sepehr-sky"></div><div class="field"><label>Avatar</label><div class="options"><div class="option active" onclick="pickAvatar('S',this)">S</div><div class="option" onclick="pickAvatar('🚀',this)">🚀</div><div class="option" onclick="pickAvatar('🌌',this)">🌌</div><div class="option" onclick="pickAvatar('🤖',this)">🤖</div></div></div></div>
+  <div id="setup3" class="setup-step"><h1>Security</h1><p class="muted">Choose how this Web OS should unlock.</p><div class="options"><div class="option active" onclick="securityMode('pin',this)">🔢<br>PIN Lock</div><div class="option" onclick="securityMode('direct',this)">⚡<br>Direct Unlock</div></div><div class="field" id="setup-pin-field"><label>4-digit PIN</label><input id="setup-pin" maxlength="4" inputmode="numeric" placeholder="1234"></div></div>
+  <div id="setup4" class="setup-step"><h1>Performance & Theme</h1><div class="options"><div class="option active" data-accent="cyan" onclick="chooseAccent('cyan',this)">Cyan Glow</div><div class="option" data-accent="purple" onclick="chooseAccent('purple',this)">Neon Purple</div><div class="option" data-accent="green" onclick="chooseAccent('green',this)">Emerald Green</div><div class="option" data-accent="orange" onclick="chooseAccent('orange',this)">Sunset Orange</div></div><div class="field"><label>Performance Mode</label><select id="setup-performance"><option>Ultra</option><option>Balanced</option><option>Battery Saver</option></select></div></div>
+  <div id="setup5" class="setup-step"><h1>Initializing...</h1><div class="progress"><i id="setup-progress"></i></div><div id="setup-logs" class="logs"></div></div>
+  <div class="setup-actions"><button id="setup-back" class="secondary" onclick="setupPrev()">Back</button><button id="setup-next" class="primary" onclick="setupNext()">Continue</button></div>
+ </div>
+</div>
+
+<div id="dynamicIsland" class="dynamic-island" onclick="toggleIsland()"><span id="islandText">SepehrSynth Radio</span><span>●</span><div id="islandControls" class="hidden"><i class="fa-solid fa-backward"></i>　<i class="fa-solid fa-play" onclick="event.stopPropagation();playSound('boot')"></i>　<i class="fa-solid fa-forward"></i></div></div>
+<div class="status-bar" onclick="toggleControlCenter()"><span id="status-time">00:00</span><span><i id="bootloader-status-icon" class="fa-solid fa-lock"></i>　<i class="fa-solid fa-wifi"></i>　🔋</span></div>
+
+<div id="control-center"><div style="display:flex;justify-content:space-between"><h2 data-i18n="control">Control Center</h2><button class="secondary" onclick="toggleControlCenter()">×</button></div><div class="cc-grid"><div class="cc-card active">📶 <span>Wi‑Fi 6E<br><small>Connected</small></span></div><div class="cc-card active">ᛒ <span>Bluetooth<br><small>On</small></span></div><div class="cc-card">🌙 <span>Dark Mode<br><small>Active</small></span></div><div class="cc-card active">⚡ <span>Performance<br><small id="cc-performance">Ultra</small></span></div></div></div>
+<div class="edge-handle" onclick="toggleEdgePanel()"></div><div id="edge-panel"><b>Power & System</b><button class="edge-btn" onclick="powerCommand('reboot')">↻ Reboot System</button><button class="edge-btn" onclick="powerCommand('recovery')">🛠 Recovery</button><button class="edge-btn" onclick="powerCommand('odin')">⇩ Downloader / Odin</button><button id="edge-install" class="edge-btn hidden" onclick="installPWA()">⬇ Install SepehrSky OS App</button><button class="edge-btn" onclick="powerCommand('poweroff')">⏻ Shut Down</button></div>
+
+<div id="home-screen"><div class="card" style="display:flex;justify-content:space-between;align-items:center"><div><b id="widget-time">00:00</b><div id="widget-date" class="muted"></div></div><div style="text-align:end">☁️ 29°C<br><small>SepehrSky</small></div></div><div><div id="desktop-pages"></div><div id="pageIndicator" class="page-indicator"></div></div><div id="dockBar" class="dock-bar"></div></div>
+<div id="app-container"></div>
+
+<div id="lock-screen"><div style="text-align:center"><div id="lock-time" style="font-size:75px;font-weight:200">00:00</div><div id="lock-date" class="muted"></div></div><div><div id="pinTitle" style="text-align:center;margin-bottom:10px">برای باز کردن، PIN را وارد کنید</div><div class="pin-dots" id="pinDots"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="pinpad"><button onclick="pinKey(1)">1</button><button onclick="pinKey(2)">2</button><button onclick="pinKey(3)">3</button><button onclick="pinKey(4)">4</button><button onclick="pinKey(5)">5</button><button onclick="pinKey(6)">6</button><button onclick="pinKey(7)">7</button><button onclick="pinKey(8)">8</button><button onclick="pinKey(9)">9</button><button></button><button onclick="pinKey(0)">0</button><button onclick="pinBackspace()">⌫</button></div></div></div>
+
+<div id="poweroff-screen" class="overlay-screen hidden"><div style="font-size:75px;margin-top:40%" onclick="turnOnDevice()">⏻</div><p class="muted">Device Off — Tap to Power On</p></div>
+<div id="recovery-screen" class="overlay-screen hidden"><h2>SepehrSky Touch Recovery</h2><button class="rec-btn" onclick="toggleBootloader()">🔑 <span id="bl-unlock-btn">Unlock Bootloader</span></button><button class="rec-btn" onclick="rebootSystem()">1. Reboot System Now</button><button class="rec-btn" onclick="openDownloadMode()">2. Bootloader / Download</button><button class="rec-btn" onclick="openDiagnostics()">3. Touch & Graphics Diagnostic</button><button class="rec-btn" onclick="wipeData()">4. Factory Reset</button><button class="rec-btn" onclick="recAction('Repair VFS')">5. Repair VFS File System</button><button class="rec-btn" onclick="powerOffDevice()">6. Power Off</button></div>
+<div id="odin-screen" class="overlay-screen hidden" style="background:#001322"><h2 style="color:var(--primary)">DOWNLOAD / ODIN MODE</h2><p class="muted">Virtual Web OS package manager</p><input type="file" id="odinZipInput" accept=".zip" onchange="flashZipPackage(event)" style="margin:20px 0"><input type="file" id="odinHtmlInput" accept=".html" onchange="flashHtmlPackage(event)"><pre id="odinLog" style="width:100%;margin-top:20px;white-space:pre-wrap;color:#38bdf8"></pre><button class="primary" onclick="rebootSystem()">Cancel & Reboot</button></div>
+<div id="toast-container"></div><div id="task-manager" class="task-overlay hidden"></div>
+<div class="nav-bar"><div class="nav-btn" onclick="openTaskManager()">■</div><div class="nav-btn" onclick="goHome()">●</div><div class="nav-btn" onclick="backAction()">‹</div></div>
+</div>
+
+<script>
+"use strict";
+class StorageEngine{
+ static get(k,f=null){try{const v=localStorage.getItem(k);return v===null?f:JSON.parse(v)}catch(e){return f}}
+ static set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+ static raw(k,f=null){try{return localStorage.getItem(k)??f}catch(e){return f}}
+ static rawSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+ static remove(k){try{localStorage.removeItem(k)}catch(e){}}
+}
+const defaultState={locale:"fa",name:"Sepehr",hostname:"sepehr-sky",avatar:"S",security:"pin",pin:"",accent:"cyan",performance:"Ultra",wallpaper:"",volume:80,brightness:100,sound:true};
+let state=Object.assign({},defaultState,StorageEngine.get("sepehr_system",{}));
+let isBootloaderUnlocked=StorageEngine.raw("sepehr_bl_unlocked","false")==="true";
+let setupStep=1,setupSecurity="pin",setupAccent="cyan",setupAvatar="S",installPrompt=null;
+const L={
+ fa:{personal:"شخصی‌سازی",control:"مرکز کنترل",settings:"تنظیمات",files:"فایل‌ها",notes:"یادداشت‌ها",terminal:"ترمینال",piano:"پیانو",recovery:"ریکاوری"},
+ en:{personal:"Personalization",control:"Control Center",settings:"Settings",files:"Files",notes:"Notes",terminal:"Terminal",piano:"Piano",recovery:"Recovery"}
+};
+const accents={cyan:["#00f2fe","rgba(0,242,254,.35)"],purple:["#b44cff","rgba(180,76,255,.35)"],green:["#20e38a","rgba(32,227,138,.35)"],orange:["#ff9d3d","rgba(255,157,61,.35)"]};
+const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+function playSound(type="click",freq=440){try{if(!state.sound)return;if(audioCtx.state==="suspended")audioCtx.resume();let o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);if(type==="click"){o.frequency.value=800;g.gain.value=.07;o.start();o.stop(audioCtx.currentTime+.05)}else if(type==="fingerprint"){o.frequency.setValueAtTime(300,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(800,audioCtx.currentTime+.15);g.gain.value=.12;o.start();o.stop(audioCtx.currentTime+.15)}else if(type==="piano"){o.type="triangle";o.frequency.value=freq;g.gain.value=.22;g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.7);o.start();o.stop(audioCtx.currentTime+.7)}else if(type==="boot"){[261.63,329.63,392,523.25].forEach((f,i)=>setTimeout(()=>playSound("piano",f),i*120))}}catch(e){}}
+class VFS{
+ static get(){try{let fs=StorageEngine.get("sepehr_vfs",null);if(!fs){fs={"/system":{"build.prop":"os_name=SepehrSky\\nversion=26.0_Ultra"},"/data":{"notes.txt":"خوش آمدید به سیستم‌عامل سپهر اسکای!"},"/photos":{},"/apps":{}};this.save(fs)}return fs}catch(e){return{}}}
+ static save(fs){try{StorageEngine.set("sepehr_vfs",fs)}catch(e){}}
+ static touch(path,folder=false){try{let fs=this.get();let p=path.startsWith("/")?path:"/data/"+path;let a=p.split("/");let dir="/"+a.slice(1,-1).join("/");if(dir==="/")dir="/data";if(!fs[dir])fs[dir]={};fs[dir][a.at(-1)]=folder?{}:"";this.save(fs);return true}catch(e){return false}}
+ static rm(path){try{let fs=this.get();let p=path.startsWith("/")?path:"/data/"+path;for(const d in fs)if(Object.prototype.hasOwnProperty.call(fs[d],p.split("/").pop()))delete fs[d][p.split("/").pop()];this.save(fs)}catch(e){}}
+ static rename(oldp,newp){try{let fs=this.get();let oldn=oldp.split("/").pop(),newn=newp.split("/").pop();for(const d in fs)if(fs[d][oldn]!==undefined){fs[d][newn]=fs[d][oldn];delete fs[d][oldn];break}this.save(fs)}catch(e){}}
+}
+let appsList=[
+{id:"spbrowser",name:"SP Browser",icon:"fa-globe",bg:"linear-gradient(135deg,#00c6ff,#0072ff)"},
+{id:"piano",name:"Piano Synth",icon:"fa-music",bg:"linear-gradient(135deg,#ec4899,#8b5cf6)"},
+{id:"files",name:"Files VFS",icon:"fa-folder-open",bg:"linear-gradient(135deg,#ff8008,#ffc837)"},
+{id:"terminal",name:"Terminal",icon:"fa-terminal",bg:"#111827"},
+{id:"notes",name:"Notes",icon:"fa-note-sticky",bg:"linear-gradient(135deg,#11998e,#38ef7d)"},
+{id:"settings",name:"Settings",icon:"fa-gear",bg:"#475569"},
+{id:"recovery",name:"Recovery",icon:"fa-microchip",bg:"#334155"},
+{id:"about",name:"About OS",icon:"fa-info-circle",bg:"#991b1b"}];
+try{appsList.push(...StorageEngine.get("sepehr_custom_apps",[]))}catch(e){}
+const windowManager={activeProcesses:[],z:5100};
+function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function showToast(msg){try{const c=document.getElementById("toast-container"),t=document.createElement("div");t.className="toast";t.textContent=msg;c.appendChild(t);setTimeout(()=>t.remove(),2200)}catch(e){}}
+function renderApps(){try{const p=document.getElementById("desktop-pages"),d=document.getElementById("dockBar"),dots=document.getElementById("pageIndicator");p.innerHTML="";d.innerHTML="";dots.innerHTML="";let n=12,total=Math.max(1,Math.ceil(appsList.length/n));for(let i=0;i<total;i++){let page=document.createElement("div");page.className="app-page";appsList.slice(i*n,(i+1)*n).forEach(a=>{let el=document.createElement("div");el.className="app-item";el.onclick=()=>{openApp(a.id);playSound()};el.innerHTML=`<div class="app-icon" style="background:${a.bg}"><i class="fa-solid ${a.icon}"></i></div><div class="app-label">${escapeHTML(a.name)}</div>`;page.appendChild(el)});p.appendChild(page);let dot=document.createElement("div");dot.className="page-dot"+(i===0?" active":"");dots.appendChild(dot)}p.onscroll=()=>{let i=Math.round(p.scrollLeft/p.clientWidth);[...dots.children].forEach((x,j)=>x.classList.toggle("active",i===j))};["spbrowser","piano","notes","settings"].forEach(id=>{let a=appsList.find(x=>x.id===id);if(a){let el=document.createElement("div");el.className="app-item";el.onclick=()=>openApp(id);el.innerHTML=`<div class="app-icon" style="width:50px;height:50px;font-size:20px;background:${a.bg}"><i class="fa-solid ${a.icon}"></i></div>`;d.appendChild(el)}})}catch(e){}}
+function makeWindow(id,title,icon,body){let existing=windowManager.activeProcesses.find(p=>p.appId===id&&!p.closed);if(existing){restoreProcess(existing.pid);return existing.win}let pid=Date.now()+Math.floor(Math.random()*1000),win=document.createElement("div");win.className="app-window";win.id="app_win_"+pid;win.dataset.pid=pid;win.style.zIndex=++windowManager.z;win.innerHTML=`<div class="app-header"><div class="title"><i class="fa-solid ${icon}"></i><span>${escapeHTML(title)}</span></div><div class="win-controls"><button data-act="min">−</button><button data-act="max">□</button><button data-act="close">×</button></div></div><div class="app-body">${body}</div>`;document.getElementById("app-container").appendChild(win);let proc={pid,appId:id,title,icon,win,minimized:false,maximized:false,closed:false};windowManager.activeProcesses.push(proc);focusProcess(proc);attachDrag(win,proc);win.querySelector('[data-act="min"]').onclick=e=>{e.stopPropagation();minimizeProcess(pid)};win.querySelector('[data-act="max"]').onclick=e=>{e.stopPropagation();maximizeProcess(pid)};win.querySelector('[data-act="close"]').onclick=e=>{e.stopPropagation();killProcess(pid)};return win}
+function focusProcess(p){try{p.win.style.zIndex=++windowManager.z;p.win.classList.remove("minimized");p.minimized=false}catch(e){}}
+function minimizeProcess(pid){let p=windowManager.activeProcesses.find(x=>x.pid===pid);if(p){p.minimized=true;p.win.classList.add("minimized")}}
+function maximizeProcess(pid){let p=windowManager.activeProcesses.find(x=>x.pid===pid);if(!p)return;p.maximized=!p.maximized;p.win.classList.toggle("maximized",p.maximized);focusProcess(p)}
+function killProcess(pid){let p=windowManager.activeProcesses.find(x=>x.pid===pid);if(!p)return;p.closed=true;try{p.win.remove()}catch(e){}windowManager.activeProcesses=windowManager.activeProcesses.filter(x=>x.pid!==pid);renderTaskManager()}
+function restoreProcess(pid){let p=windowManager.activeProcesses.find(x=>x.pid===pid&&!x.closed);if(p){focusProcess(p);document.getElementById("task-manager").classList.add("hidden")}}
+function attachDrag(win,p){let h=win.querySelector(".app-header"),drag=false,sx=0,sy=0,ox=0,oy=0;h.addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;drag=true;h.setPointerCapture(e.pointerId);let r=win.getBoundingClientRect();let pr=document.getElementById("app-container").getBoundingClientRect();sx=e.clientX;sy=e.clientY;ox=r.left-pr.left;oy=r.top-pr.top;focusProcess(p)});h.addEventListener("pointermove",e=>{if(!drag||p.maximized)return;let pr=document.getElementById("app-container").getBoundingClientRect(),nw=win.offsetWidth,nh=win.offsetHeight,x=Math.max(0,Math.min(ox+e.clientX-sx,pr.width-nw)),y=Math.max(0,Math.min(oy+e.clientY-sy,pr.height-nh));win.style.left=x+"px";win.style.top=y+"px"});h.addEventListener("pointerup",()=>drag=false)}
+function openApp(id){try{let a=appsList.find(x=>x.id===id);if(!a)return;switch(id){
+case"spbrowser":return openBrowser();case"piano":return openPiano();case"files":return openFiles();case"terminal":return openTerminal();case"notes":return openNotes();case"settings":return openSettings();case"recovery":document.getElementById("recovery-screen").classList.remove("hidden");return;case"about":return makeWindow(id,"About OS","fa-info-circle",`<div style="text-align:center;padding:30px"><div style="font-size:60px;color:var(--primary)">◉</div><h2>SepehrSky OS 26 Ultra</h2><p class="muted">Enterprise Web Runtime • Multi-window Edition</p></div>`);default:return makeWindow(id,a.name,a.icon,`<iframe style="width:100%;height:100%;border:0;background:#fff" srcdoc="${escapeHTML(a.htmlCode||"<h1>Custom Web App</h1>")}"></iframe>`)}}catch(e){showToast("App error")}}
+function openBrowser(){return makeWindow("spbrowser","SP Browser","fa-globe",`<iframe src="https://www.google.com/search?igu=1" style="width:100%;height:100%;border:0;background:#fff"></iframe>`)}
+function openPiano(){return makeWindow("piano","Piano Synth","fa-music",`<h3>Interactive Web Synth</h3><p class="muted">کلاویه‌ها را لمس کنید.</p><div class="piano-keyboard">${[[261.63,"C4"],[293.66,"D4"],[329.63,"E4"],[349.23,"F4"],[392,"G4"],[440,"A4"],[493.88,"B4"]].map(x=>`<div class="piano-key" onclick="playSound('piano',${x[0]})">${x[1]}</div>`).join("")}</div>`)}
+function openFiles(){let fs=VFS.get();let rows="";for(const d in fs){rows+=`<div class="card"><b>📁 ${escapeHTML(d)}</b>${Object.keys(fs[d]).map(n=>`<div style="padding:8px;display:flex;justify-content:space-between"><span>📄 ${escapeHTML(n)}</span><button class="secondary" onclick="vfsDelete('${escapeHTML(n)}')">Delete</button></div>`).join("")}</div>`}return makeWindow("files","Files VFS","fa-folder-open",`<div style="display:flex;gap:8px"><button class="primary" onclick="vfsCreate(false)">+ File</button><button class="secondary" onclick="vfsCreate(true)">+ Folder</button></div>${rows}`)}
+function vfsCreate(folder){let n=prompt(folder?"Folder name:":"File name:");if(n){VFS.touch(n,folder);refreshApp("files")}}
+function vfsDelete(n){VFS.rm(n);refreshApp("files")}
+function refreshApp(id){let p=windowManager.activeProcesses.find(x=>x.appId===id);if(p)killProcess(p.pid);openApp(id)}
+function openNotes(){let notes=StorageEngine.get("sepehr_notes",[]),note=notes[0]||{id:Date.now(),title:"My Note",body:"",modified:Date.now()};return makeWindow("notes","Notes","fa-note-sticky",`<input id="note-title" value="${escapeHTML(note.title)}" style="width:100%;padding:12px;background:#0006;border:1px solid #fff2;border-radius:14px;color:#fff"><textarea id="note-body" style="width:100%;height:70%;margin-top:10px;padding:14px;background:#0006;color:#fff;border:1px solid #fff2;border-radius:14px">${escapeHTML(note.body)}</textarea><small id="save-state" class="muted">Saved</small>`)}
+function saveNote(){try{let title=document.getElementById("note-title")?.value||"Untitled",body=document.getElementById("note-body")?.value||"",notes=StorageEngine.get("sepehr_notes",[]);notes=[{id:notes[0]?.id||Date.now(),title,body,modified:Date.now()},...notes.filter(x=>x.id!==notes[0]?.id)];StorageEngine.set("sepehr_notes",notes);let s=document.getElementById("save-state");if(s)s.textContent="Saved"}catch(e){}}
+function openTerminal(){return makeWindow("terminal","Terminal Shell","fa-terminal",`<div id="term-out" class="term">SepehrSky Shell v26.0 Ultra\nType 'help' for commands.\n\n</div><div style="display:flex"><span>sepehr@sky:~$ </span><input id="termInput" class="term-input" onkeydown="handleTerminal(event)" autofocus></div>`)}
+function terminalPrint(s){let o=document.getElementById("term-out");if(o)o.textContent+=s+"\n"}
+function handleTerminal(e){if(e.key!=="Enter")return;let i=e.target,cmd=i.value.trim();i.value="";terminalPrint("sepehr@sky:~$ "+cmd);let a=cmd.split(/\s+/),c=a[0];try{if(c==="help")terminalPrint("help clear ls reboot neofetch tasklist kill set-lang fs-touch fs-rm theme setup-reset");else if(c==="clear")document.getElementById("term-out").textContent="";else if(c==="ls")terminalPrint(Object.keys(VFS.get()).join("  "));else if(c==="reboot")rebootSystem();else if(c==="neofetch")terminalPrint(`OS: SepehrSky OS 26 Ultra\nLocale: ${state.locale}\nPerformance: ${state.performance}`);else if(c==="tasklist")terminalPrint(windowManager.activeProcesses.filter(p=>!p.closed).map(p=>`${p.pid} ${p.title} ${p.minimized?"MIN":"RUN"}`).join("\n")||"No processes");else if(c==="kill"){let pid=Number(a[1]);killProcess(pid);terminalPrint("Process terminated: "+pid)}else if(c==="set-lang"&&(a[1]==="fa"||a[1]==="en")){applyLocale(a[1]);terminalPrint("Language changed.")}else if(c==="fs-touch"&&a[1]){VFS.touch(a[1]);terminalPrint("Created "+a[1])}else if(c==="fs-rm"&&a[1]){VFS.rm(a[1]);terminalPrint("Removed "+a[1])}else if(c==="theme"&&accents[a[1]]){applyAccent(a[1]);terminalPrint("Theme changed.")}else if(c==="setup-reset"){StorageEngine.rawSet("sepehr_setup_completed","false");location.reload()}else terminalPrint("Command not found: "+cmd)}catch(e){terminalPrint("ERR: "+e.message)}}
+function openSettings(){let can=!!installPrompt;return makeWindow("settings","Settings","fa-gear",`<div class="card"><b>${escapeHTML(state.name)}</b><small class="muted">${escapeHTML(state.hostname)}</small></div><div class="card">Accent: ${state.accent}<button class="secondary" onclick="cycleAccent()">Change</button></div><div class="card">Performance: ${state.performance}<select onchange="state.performance=this.value;saveState();document.getElementById('cc-performance').textContent=this.value"><option ${state.performance==="Ultra"?"selected":""}>Ultra</option><option ${state.performance==="Balanced"?"selected":""}>Balanced</option><option ${state.performance==="Battery Saver"?"selected":""}>Battery Saver</option></select></div><div class="card">Volume <input type="range" min="0" max="100" value="${state.volume}" oninput="state.volume=+this.value;saveState()"></div><div class="card">Brightness <input type="range" min="30" max="100" value="${state.brightness}" oninput="state.brightness=+this.value;saveState();document.getElementById('phone-container').style.filter='brightness('+this.value/100+')'"></div>${can?'<button class="primary" onclick="installPWA()">⬇ Install SepehrSky OS App</button>':""}<button class="secondary" onclick="document.getElementById('wallpaperInput').click()">🖼 Wallpaper</button><input id="wallpaperInput" type="file" accept="image/*" class="hidden" onchange="uploadWallpaper(event)"><button class="secondary" onclick="StorageEngine.rawSet('sepehr_setup_completed','false');location.reload()">Run Setup Wizard Again</button>`)}
+function cycleAccent(){let a=["cyan","purple","green","orange"],i=a.indexOf(state.accent);applyAccent(a[(i+1)%a.length])}
+function saveState(){StorageEngine.set("sepehr_system",state)}
+function applyAccent(a){state.accent=a;document.documentElement.style.setProperty("--primary",accents[a][0]);document.documentElement.style.setProperty("--glow",accents[a][1]);saveState()}
+function chooseAccent(a,el){setupAccent=a;document.querySelectorAll("[data-accent]").forEach(x=>x.classList.remove("active"));el.classList.add("active");applyAccent(a)}
+function applyLocale(l){state.locale=l;document.documentElement.lang=l;document.documentElement.dir=l==="fa"?"rtl":"ltr";document.documentElement.style.setProperty("--dir-text-align",l==="fa"?"right":"left");document.documentElement.style.setProperty("--flex-direction-reverse",l==="fa"?"row-reverse":"row");document.querySelectorAll("[data-i18n]").forEach(x=>x.textContent=L[l][x.dataset.i18n]||x.textContent);saveState()}
+function chooseLocale(l,el){applyLocale(l);el.parentElement.querySelectorAll(".option").forEach(x=>x.classList.remove("active"));el.classList.add("active")}
+function pickAvatar(a,el){setupAvatar=a;el.parentElement.querySelectorAll(".option").forEach(x=>x.classList.remove("active"));el.classList.add("active")}
+function securityMode(m,el){setupSecurity=m;el.parentElement.querySelectorAll(".option").forEach(x=>x.classList.remove("active"));el.classList.add("active");document.getElementById("setup-pin-field").classList.toggle("hidden",m!=="pin")}
+function setupShow(n){document.querySelectorAll(".setup-step").forEach(x=>x.classList.remove("active"));document.getElementById("setup"+n).classList.add("active");document.getElementById("setup-back").classList.toggle("hidden",n===1);document.getElementById("setup-next").textContent=n===5?"":n===4?"Finish & Launch":"Continue"}
+function setupNext(){if(setupStep===1){setupStep=2}else if(setupStep===2){state.name=document.getElementById("setup-name").value||"Sepehr";state.hostname=document.getElementById("setup-host").value||"sepehr-sky";state.avatar=setupAvatar;setupStep=3}else if(setupStep===3){let p=document.getElementById("setup-pin").value;if(setupSecurity==="pin"&&!/^\d{4}$/.test(p)){showToast("PIN must be 4 digits");return}state.security=setupSecurity;state.pin=setupSecurity==="pin"?p:"";setupStep=4}else if(setupStep===4){state.performance=document.getElementById("setup-performance").value;setupStep=5;setupShow(5);finalizeSetup();return}setupShow(setupStep)}
+function setupPrev(){if(setupStep>1){setupStep--;setupShow(setupStep)}}
+async function finalizeSetup(){let logs=["Mounting VFS...","Generating System Keys...","Building PWA Cache...","Applying UI Preferences...","Starting Window Manager...","System Ready."];for(let i=0;i<logs.length;i++){document.getElementById("setup-logs").textContent+=logs[i]+"\n";document.getElementById("setup-progress").style.width=((i+1)/logs.length*100)+"%";await new Promise(r=>setTimeout(r,450))}StorageEngine.rawSet("sepehr_setup_completed","true");saveState();playSound("boot");setTimeout(()=>{document.getElementById("setup-wizard-overlay").classList.add("hidden");showLockScreen()},400)}
+function initSetup(){let done=StorageEngine.raw("sepehr_setup_completed","false")==="true";if(!done){document.getElementById("setup-wizard-overlay").classList.remove("hidden");document.getElementById("lock-screen").classList.add("hidden")}else{document.getElementById("setup-wizard-overlay").classList.add("hidden");showLockScreen()}}
+function showLockScreen(){let l=document.getElementById("lock-screen");l.classList.remove("hidden");l.classList.remove("unlocked")}
+function updateClock(){let n=new Date(),t=n.toLocaleTimeString(state.locale==="fa"?"fa-IR":"en-US",{hour:"2-digit",minute:"2-digit",hour12:false}),d=n.toLocaleDateString(state.locale==="fa"?"fa-IR":"en-US",{weekday:"long",month:"short",day:"numeric"});["status-time","widget-time","lock-time"].forEach(id=>{let x=document.getElementById(id);if(x)x.textContent=t});["widget-date","lock-date"].forEach(id=>{let x=document.getElementById(id);if(x)x.textContent=d})}
+let typed="";
+function updatePinDots(){document.querySelectorAll("#pinDots i").forEach((x,i)=>x.classList.toggle("fill",i<typed.length))}
+function pinKey(n){if(state.security==="direct")return unlockNow();if(typed.length>=6)return;typed+=n;updatePinDots();if(state.pin&&typed===state.pin)unlockNow();else if(typed.length===6){typed="";updatePinDots();showToast("PIN اشتباه است")}}
+function pinBackspace(){typed=typed.slice(0,-1);updatePinDots()}
+function unlockNow(){typed="";updatePinDots();document.getElementById("lock-screen").classList.add("unlocked");playSound("fingerprint")}
+function toggleIsland(){document.getElementById("dynamicIsland").classList.toggle("expanded");document.getElementById("islandControls").classList.toggle("hidden");playSound()}
+function toggleControlCenter(){if(!document.getElementById("setup-wizard-overlay").classList.contains("hidden"))return;document.getElementById("control-center").classList.toggle("active")}
+function toggleEdgePanel(){if(!document.getElementById("setup-wizard-overlay").classList.contains("hidden"))return;document.getElementById("edge-panel").classList.toggle("active")}
+function openTaskManager(){if(!windowManager.activeProcesses.length){showToast("No active processes");return}let o=document.getElementById("task-manager");o.classList.remove("hidden");renderTaskManager()}
+function renderTaskManager(){let o=document.getElementById("task-manager");o.innerHTML=`<h2>Recent Apps</h2><div class="task-cards">${windowManager.activeProcesses.filter(p=>!p.closed).map(p=>`<div class="task-card"><b>${escapeHTML(p.title)}</b><div class="task-thumb"><i class="fa-solid ${p.icon}"></i></div><small>${p.minimized?"MINIMIZED":"ACTIVE"}</small><div style="display:flex;gap:5px;margin-top:8px"><button class="primary" onclick="restoreProcess(${p.pid})">Open</button><button class="secondary" onclick="killProcess(${p.pid})">Kill</button></div></div>`).join("")}</div><button class="primary" onclick="clearAllProcesses()">Clear All Processes</button><button class="secondary" style="margin-inline-start:8px" onclick="document.getElementById('task-manager').classList.add('hidden')">Close</button>`}
+function clearAllProcesses(){[...windowManager.activeProcesses].forEach(p=>killProcess(p.pid));document.getElementById("task-manager").classList.add("hidden")}
+function goHome(){windowManager.activeProcesses.forEach(p=>minimizeProcess(p.pid));document.getElementById("lock-screen").classList.add("unlocked")}
+function backAction(){let active=windowManager.activeProcesses.filter(p=>!p.minimized&&!p.closed).sort((a,b)=>b.win.style.zIndex-a.win.style.zIndex)[0];if(active)minimizeProcess(active.pid)}
+function uploadWallpaper(e){try{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{state.wallpaper=r.result;document.getElementById("home-screen").style.backgroundImage=`url("${r.result}")`;saveState()};r.readAsDataURL(f)}catch(e){}}
+function toggleBootloader(){isBootloaderUnlocked=!isBootloaderUnlocked;StorageEngine.rawSet("sepehr_bl_unlocked",String(isBootloaderUnlocked));updateBootloaderUI();playSound("fingerprint")}
+function updateBootloaderUI(){let x=document.getElementById("bootloader-status-icon"),b=document.getElementById("bl-unlock-btn");if(x)x.className=isBootloaderUnlocked?"fa-solid fa-lock-open":"fa-solid fa-lock";if(b)b.textContent=isBootloaderUnlocked?"Relock Bootloader (UNLOCKED)":"Unlock Bootloader (LOCKED)"}
+function powerCommand(c){toggleEdgePanel();if(c==="reboot")rebootSystem();if(c==="recovery")document.getElementById("recovery-screen").classList.remove("hidden");if(c==="odin")openDownloadMode();if(c==="poweroff")powerOffDevice()}
+function bootBrandSequence(done){
+ try{
+  const b=document.getElementById("boot-sequence");
+  if(!b){done?.();return}
+  b.classList.remove("hidden");
+  b.style.opacity="1";
+
+  b.querySelectorAll(".boot-s,.boot-word,.boot-final,.boot-powered,.boot-loader i").forEach(el=>{
+   el.style.animation="none";
+   void el.offsetWidth;
+   el.style.animation="";
+  });
+
+  clearTimeout(window.__sepehrBootTimer);
+  window.__sepehrBootTimer=setTimeout(()=>{
+   b.style.opacity="0";
+   setTimeout(()=>{
+    b.classList.add("hidden");
+    b.style.opacity="1";
+    done?.();
+   },700);
+  },30000);
+ }catch(e){
+  console.error("Boot sequence error",e);
+  done?.();
+ }
+}
+function shutdownBrandSequence(done){try{const s=document.getElementById("shutdown-sequence");if(!s){done?.();return}s.classList.remove("hidden");s.style.opacity="1";setTimeout(()=>{s.style.opacity="0";setTimeout(()=>{s.classList.add("hidden");done?.()},700)},1900)}catch(e){done?.()}}
+function powerOffDevice(){try{document.getElementById("recovery-screen")?.classList.add("hidden");document.getElementById("odin-screen")?.classList.add("hidden");shutdownBrandSequence(()=>document.getElementById("poweroff-screen")?.classList.remove("hidden"));playSound()}catch(e){}}
+function turnOnDevice(){try{document.getElementById("poweroff-screen")?.classList.add("hidden");playSound("boot");bootBrandSequence(()=>{showLockScreen()});}catch(e){}}
+function rebootSystem(){try{sessionStorage.setItem("sepehr_boot_after_reload","1");location.reload()}catch(e){location.reload()}}
+function openDownloadMode(){document.getElementById("recovery-screen").classList.add("hidden");document.getElementById("odin-screen").classList.remove("hidden")}
+function recAction(n){showToast("Recovery: "+n)}
+function wipeData(){if(confirm("Factory reset SepehrSky OS?")){localStorage.clear();location.reload()}}
+function openDiagnostics(){let html=`<h3>Hardware Diagnostics</h3><p class="muted">Canvas multi-touch tracker</p><canvas id="touchCanvas" width="330" height="180" style="width:100%;background:#020408;border:1px solid #a3e635;border-radius:15px;touch-action:none"></canvas><p id="fpsMeter" class="card">GPU FPS: measuring...</p><div id="webglTest" class="card"></div>`;let w=makeWindow("diagnostics","Hardware Diagnostics","fa-microchip",html);setTimeout(()=>{let c=document.getElementById("touchCanvas"),ctx=c?.getContext("2d");if(c&&ctx){c.onpointermove=e=>{ctx.clearRect(0,0,c.width,c.height);let r=c.getBoundingClientRect(),x=(e.clientX-r.left)*c.width/r.width,y=(e.clientY-r.top)*c.height/r.height;ctx.beginPath();ctx.arc(x,y,12,0,Math.PI*2);ctx.strokeStyle="#a3e635";ctx.stroke()}}let gl=c?.getContext("webgl");document.getElementById("webglTest").textContent=gl?"WebGL: PASS":"WebGL: unavailable";let st=performance.now(),frames=0;function loop(){frames++;if(performance.now()-st>1000){document.getElementById("fpsMeter").textContent="GPU FPS: "+frames;frames=0;st=performance.now()}requestAnimationFrame(loop)}loop()},50);return w}
+async function flashHtmlPackage(e){try{let f=e.target.files[0];if(!f)return;let html=await f.text(),a={id:"custom_html_"+Date.now(),name:f.name.replace(/\.html$/i,""),icon:"fa-globe",bg:"linear-gradient(135deg,#00c6ff,#0072ff)",htmlCode:html};let arr=StorageEngine.get("sepehr_custom_apps",[]);arr.push(a);StorageEngine.set("sepehr_custom_apps",arr);appsList.push(a);renderApps();document.getElementById("odinLog").textContent+="\nHTML App Installed: "+a.name;showToast("App installed") }catch(e){showToast("HTML install error")}}
+async function flashZipPackage(e){try{let f=e.target.files[0];if(!f||!window.JSZip)return;let z=await JSZip.loadAsync(f),a={id:"custom_app_"+Date.now(),name:f.name.replace(/\.zip$/i,""),icon:"fa-box-open",bg:"linear-gradient(135deg,#10b981,#059669)"};let files=Object.keys(z.files).length;let arr=StorageEngine.get("sepehr_custom_apps",[]);arr.push(a);StorageEngine.set("sepehr_custom_apps",arr);appsList.push(a);renderApps();document.getElementById("odinLog").textContent=`ZIP parsed successfully. ${files} entries found.\nVirtual package registered: ${a.name}`;showToast("ZIP package registered")}catch(e){showToast("Invalid ZIP package")}}
+function createManifest(){try{let m={name:"SepehrSky OS 26 Ultra",short_name:"SepehrSky OS",display:"standalone",start_url:".",background_color:"#020408",theme_color:"#00f2fe",icons:[]},u=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:"application/manifest+json"})),l=document.createElement("link");l.rel="manifest";l.href=u;document.head.appendChild(l)}catch(e){}}
+function registerSW(){try{if(!("serviceWorker"in navigator)||location.protocol==="file:")return;let sw=`const CACHE='sephersky-v26';self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css','https://fonts.googleapis.com/css2?family=Vazirmatn','https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js']).catch(()=>{})));self.skipWaiting()});self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>r)))})`;let u=URL.createObjectURL(new Blob([sw],{type:"text/javascript"}));navigator.serviceWorker.register(u).catch(()=>{})}catch(e){}}
+function installPWA(){try{if(installPrompt){installPrompt.prompt();installPrompt.userChoice.finally(()=>installPrompt=null)}else showToast("Install prompt is not available in this browser")}catch(e){}}
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;document.getElementById("edge-install").classList.remove("hidden")});
+document.addEventListener("input",e=>{if(e.target.id==="note-body"||e.target.id==="note-title"){let s=document.getElementById("save-state");if(s)s.textContent="Saving...";clearTimeout(window.noteTimer);window.noteTimer=setTimeout(saveNote,350)}});
+window.addEventListener("keydown",e=>{if(e.key==="Escape")document.getElementById("task-manager").classList.add("hidden")});
+(function init(){
+ try{
+  document.getElementById("setup-wizard-overlay")?.classList.add("hidden");
+  document.getElementById("lock-screen")?.classList.add("hidden");
+  document.getElementById("task-manager")?.classList.add("hidden");
+
+  applyLocale(state.locale);
+  applyAccent(state.accent);
+  if(state.wallpaper)document.getElementById("home-screen").style.backgroundImage=`url("${state.wallpaper}")`;
+  renderApps();
+  updateClock();
+  updateBootloaderUI();
+  setInterval(updateClock,1000);
+  createManifest();
+  registerSW();
+
+  bootBrandSequence(()=>{
+   try{initSetup()}catch(e){console.error("Post-boot init error",e)}
+  });
+ }catch(e){console.error("System init error",e)}
+})();
+</script>
+</body>
+</html>
