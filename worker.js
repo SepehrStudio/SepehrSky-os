@@ -1,4 +1,4 @@
-const ADMIN_TOKEN = "semfmdmdms£(#(=(449×9#";
+const ADMIN_TOKEN = "SepehrSky.1394.sepehr";
 
 const RATE_LIMIT = 120;
 const RATE_WINDOW_MS = 60_000;
