@@ -3,6 +3,10 @@ const ADMIN_TOKEN = "SepehrSky.1394.sepehr";
 const RATE_LIMIT = 120;
 const RATE_WINDOW_MS = 60_000;
 
+// مدت نگهداری اطلاعات آخرین بازدید هر IP
+const VISITOR_TTL = 60 * 60 * 24 * 7;
+
+// مسیرهای مشکوک
 const suspiciousPatterns = [
   "/.env",
   "/.git/",
@@ -19,7 +23,7 @@ const rateMap = new Map();
 
 
 // =========================
-// JSON RESPONSE
+// Helpers
 // =========================
 
 function json(data, status = 200) {
@@ -36,10 +40,6 @@ function json(data, status = 200) {
 }
 
 
-// =========================
-// IP
-// =========================
-
 function getIP(request) {
   return (
     request.headers.get("CF-Connecting-IP") ||
@@ -49,10 +49,6 @@ function getIP(request) {
 }
 
 
-// =========================
-// COUNTRY
-// =========================
-
 function getCountry(request) {
   return (
     request.headers.get("CF-IPCountry") ||
@@ -60,10 +56,6 @@ function getCountry(request) {
   );
 }
 
-
-// =========================
-// SUSPICIOUS PATH
-// =========================
 
 function isSuspicious(path) {
   const p = path.toLowerCase();
@@ -75,21 +67,29 @@ function isSuspicious(path) {
 }
 
 
-// =========================
-// RATE LIMIT
-// =========================
+function validIP(ip) {
+  if (typeof ip !== "string") {
+    return false;
+  }
+
+  const value = ip.trim();
+
+  if (!value || value.length > 100) {
+    return false;
+  }
+
+  return /^[0-9a-fA-F:.]+$/.test(value);
+}
+
 
 function rateLimited(ip) {
-
   const now = Date.now();
-
   const item = rateMap.get(ip);
 
   if (
     !item ||
     now - item.start > RATE_WINDOW_MS
   ) {
-
     rateMap.set(ip, {
       start: now,
       count: 1
@@ -104,12 +104,20 @@ function rateLimited(ip) {
 }
 
 
+function checkAdmin(request) {
+  const authorization =
+    request.headers.get("Authorization") || "";
+
+  return authorization ===
+    `Bearer ${ADMIN_TOKEN}`;
+}
+
+
 // =========================
-// CHECK BLOCK
+// KV - Block
 // =========================
 
 async function isBlocked(env, ip) {
-
   if (
     !env.SECURITY_KV ||
     ip === "unknown"
@@ -126,15 +134,119 @@ async function isBlocked(env, ip) {
 }
 
 
+async function blockIP(env, ip) {
+  if (!env.SECURITY_KV) {
+    throw new Error(
+      "SECURITY_KV is not configured."
+    );
+  }
+
+  await env.SECURITY_KV.put(
+    `block:${ip}`,
+    "1"
+  );
+}
+
+
+async function unblockIP(env, ip) {
+  if (!env.SECURITY_KV) {
+    throw new Error(
+      "SECURITY_KV is not configured."
+    );
+  }
+
+  await env.SECURITY_KV.delete(
+    `block:${ip}`
+  );
+}
+
+
+async function listBlockedIPs(env) {
+  if (!env.SECURITY_KV) {
+    return [];
+  }
+
+  const result =
+    await env.SECURITY_KV.list({
+      prefix: "block:",
+      limit: 100
+    });
+
+  return result.keys.map(
+    key =>
+      key.name.substring(6)
+  );
+}
+
+
 // =========================
-// SAVE SECURITY EVENT
+// KV - Visitors
 // =========================
 
-async function saveSecurityEvent(
-  env,
-  event
-) {
+// هر IP فقط آخرین وضعیت خودش را نگه می‌دارد
+async function saveVisitor(env, visitor) {
+  if (
+    !env.SECURITY_KV ||
+    visitor.ip === "unknown"
+  ) {
+    return;
+  }
 
+  await env.SECURITY_KV.put(
+    `visitor:${visitor.ip}`,
+    JSON.stringify(visitor),
+    {
+      expirationTtl: VISITOR_TTL
+    }
+  );
+}
+
+
+async function getVisitors(env) {
+  if (!env.SECURITY_KV) {
+    return [];
+  }
+
+  const result =
+    await env.SECURITY_KV.list({
+      prefix: "visitor:",
+      limit: 100
+    });
+
+  const visitors = [];
+
+  for (const key of result.keys) {
+    const value =
+      await env.SECURITY_KV.get(
+        key.name
+      );
+
+    if (!value) {
+      continue;
+    }
+
+    try {
+      visitors.push(
+        JSON.parse(value)
+      );
+    } catch {}
+  }
+
+  visitors.sort(
+    (a, b) =>
+      (b.time || 0) -
+      (a.time || 0)
+  );
+
+  return visitors.slice(0, 100);
+}
+
+
+// =========================
+// KV - Security Events
+// =========================
+
+async function saveSecurityEvent(env, event) {
   if (!env.SECURITY_KV) {
     return;
   }
@@ -153,76 +265,7 @@ async function saveSecurityEvent(
 }
 
 
-// =========================
-// BLOCK IP
-// =========================
-
-async function blockIP(env, ip) {
-
-  if (!env.SECURITY_KV) {
-
-    throw new Error(
-      "SECURITY_KV is not configured."
-    );
-  }
-
-  await env.SECURITY_KV.put(
-    `block:${ip}`,
-    "1"
-  );
-}
-
-
-// =========================
-// UNBLOCK IP
-// =========================
-
-async function unblockIP(env, ip) {
-
-  if (!env.SECURITY_KV) {
-
-    throw new Error(
-      "SECURITY_KV is not configured."
-    );
-  }
-
-  await env.SECURITY_KV.delete(
-    `block:${ip}`
-  );
-}
-
-
-// =========================
-// LIST BLOCKED IPS
-// =========================
-
-async function listBlockedIPs(env) {
-
-  if (!env.SECURITY_KV) {
-    return [];
-  }
-
-  const result =
-    await env.SECURITY_KV.list({
-      prefix: "block:",
-      limit: 100
-    });
-
-  return result.keys.map(
-    key =>
-      key.name.substring(
-        "block:".length
-      )
-  );
-}
-
-
-// =========================
-// RECENT EVENTS
-// =========================
-
 async function getRecentEvents(env) {
-
   if (!env.SECURITY_KV) {
     return [];
   }
@@ -236,7 +279,6 @@ async function getRecentEvents(env) {
   const events = [];
 
   for (const key of result.keys) {
-
     const value =
       await env.SECURITY_KV.get(
         key.name
@@ -247,14 +289,10 @@ async function getRecentEvents(env) {
     }
 
     try {
-
       events.push(
         JSON.parse(value)
       );
-
-    } catch {
-      // Ignore invalid event
-    }
+    } catch {}
   }
 
   events.sort(
@@ -268,60 +306,12 @@ async function getRecentEvents(env) {
 
 
 // =========================
-// ADMIN AUTH
-// =========================
-
-function checkAdmin(request) {
-
-  const authorization =
-    request.headers.get(
-      "Authorization"
-    ) || "";
-
-  return (
-    authorization ===
-    `Bearer ${ADMIN_TOKEN}`
-  );
-}
-
-
-// =========================
-// VALID IP
-// =========================
-
-function validIP(ip) {
-
-  if (
-    typeof ip !== "string"
-  ) {
-    return false;
-  }
-
-  const value =
-    ip.trim();
-
-  if (
-    !value ||
-    value.length > 100
-  ) {
-    return false;
-  }
-
-  return /^[0-9a-fA-F:.]+$/.test(
-    value
-  );
-}
-
-
-// =========================
-// SECURITY DASHBOARD
+// Dashboard
 // =========================
 
 function securityDashboard() {
-
   return new Response(
 `<!doctype html>
-
 <html lang="fa" dir="rtl">
 
 <head>
@@ -359,7 +349,7 @@ h1 {
 }
 
 main {
-  max-width: 1150px;
+  max-width: 1200px;
   margin: auto;
   padding: 20px;
 }
@@ -384,10 +374,6 @@ input {
   outline: none;
 }
 
-input:focus {
-  border-color: #4c91d9;
-}
-
 button {
   border: 0;
   border-radius: 10px;
@@ -407,6 +393,7 @@ button:disabled {
   grid-template-columns:
     repeat(auto-fit,minmax(180px,1fr));
   gap: 15px;
+  margin-bottom: 20px;
 }
 
 .card {
@@ -429,7 +416,7 @@ button:disabled {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 750px;
+  min-width: 800px;
 }
 
 th,
@@ -518,10 +505,7 @@ Private security dashboard
 
 <main>
 
-<section
-  id="login"
-  class="login"
->
+<section id="login" class="login">
 
 <h2>🔐 ورود مدیر</h2>
 
@@ -548,66 +532,33 @@ Private security dashboard
 </section>
 
 
-<section
-  id="dashboard"
-  class="hidden"
->
+<section id="dashboard" class="hidden">
 
 <div class="grid">
 
 <div class="card">
-
 👥 Requests
-
-<div
-  id="requests"
-  class="number"
->
-—
+<div id="requests" class="number">—</div>
 </div>
-
-</div>
-
 
 <div class="card">
+🌐 Visitors
+<div id="visitors" class="number">—</div>
+</div>
 
+<div class="card">
 🌍 Countries
-
-<div
-  id="countries"
-  class="number"
->
-—
+<div id="countries" class="number">—</div>
 </div>
-
-</div>
-
 
 <div class="card">
-
 🚨 Suspicious
-
-<div
-  id="suspicious"
-  class="number"
->
-—
+<div id="suspicious" class="number">—</div>
 </div>
-
-</div>
-
 
 <div class="card">
-
 🚫 Blocked
-
-<div
-  id="blocked"
-  class="number"
->
-—
-</div>
-
+<div id="blocked" class="number">—</div>
 </div>
 
 </div>
@@ -645,10 +596,10 @@ Private security dashboard
 
 <div class="panel">
 
-<h2>🌐 IP Security List</h2>
+<h2>👥 آخرین بازدیدکنندگان</h2>
 
 <div class="small">
-از این قسمت می‌توانی IPهای ثبت‌شده را مدیریت کنی.
+درخواست‌های عادی نیز در این قسمت ثبت می‌شوند.
 </div>
 
 <br>
@@ -660,12 +611,40 @@ Private security dashboard
 <thead>
 
 <tr>
+<th>IP</th>
+<th>Country</th>
+<th>Path</th>
+<th>Time</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
 
+</thead>
+
+<tbody id="visitorTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<div class="panel">
+
+<h2>🌐 IP Security List</h2>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
 <th>IP</th>
 <th>Country</th>
 <th>Status</th>
 <th>Action</th>
-
 </tr>
 
 </thead>
@@ -690,13 +669,11 @@ Private security dashboard
 <thead>
 
 <tr>
-
 <th>IP</th>
 <th>Country</th>
 <th>Path</th>
 <th>Status</th>
 <th>Time</th>
-
 </tr>
 
 </thead>
@@ -724,27 +701,20 @@ let auth = "";
 function showToast(message) {
 
   const toast =
-    document.getElementById(
-      "toast"
-    );
+    document.getElementById("toast");
 
-  toast.textContent =
-    message;
-
-  toast.style.display =
-    "block";
+  toast.textContent = message;
+  toast.style.display = "block";
 
   setTimeout(() => {
-
-    toast.style.display =
-      "none";
-
+    toast.style.display = "none";
   }, 2500);
+
 }
 
 
 // =========================
-// LOGIN
+// Login
 // =========================
 
 async function login() {
@@ -756,26 +726,18 @@ async function login() {
       .trim();
 
   const msg =
-    document.getElementById(
-      "loginMsg"
-    );
+    document.getElementById("loginMsg");
 
   const button =
-    document.getElementById(
-      "loginButton"
-    );
+    document.getElementById("loginButton");
 
   if (!token) {
-
     msg.textContent =
       "⚠️ توکن را وارد کن";
-
     return;
   }
 
-  button.disabled =
-    true;
-
+  button.disabled = true;
   button.textContent =
     "⏳ در حال بررسی...";
 
@@ -805,9 +767,7 @@ async function login() {
 
     if (!response.ok) {
 
-      if (
-        response.status === 401
-      ) {
+      if (response.status === 401) {
 
         msg.textContent =
           "❌ توکن اشتباه است";
@@ -821,7 +781,6 @@ async function login() {
       }
 
       auth = "";
-
       return;
     }
 
@@ -829,11 +788,8 @@ async function login() {
     const data =
       await response.json();
 
-
-    if (
-      !data ||
-      typeof data !== "object"
-    ) {
+    if (!data ||
+        typeof data !== "object") {
 
       msg.textContent =
         "❌ پاسخ نامعتبر از سرور";
@@ -844,18 +800,15 @@ async function login() {
 
     auth = token;
 
-
     document
       .getElementById("login")
       .classList
       .add("hidden");
 
-
     document
       .getElementById("dashboard")
       .classList
       .remove("hidden");
-
 
     await loadData();
 
@@ -870,30 +823,21 @@ async function login() {
 
   } finally {
 
-    button.disabled =
-      false;
-
-    button.textContent =
-      "🔐 ورود";
+    button.disabled = false;
+    button.textContent = "🔐 ورود";
 
   }
 
 }
 
 
-// مهم:
-// ورود با Enter هم کار می‌کند.
-
 document
   .getElementById("loginForm")
   .addEventListener(
     "submit",
-    function(event) {
-
+    event => {
       event.preventDefault();
-
       login();
-
     }
   );
 
@@ -902,10 +846,7 @@ document
 // API
 // =========================
 
-async function api(
-  url,
-  options = {}
-) {
+async function api(url, options = {}) {
 
   options.headers = {
     ...(options.headers || {}),
@@ -914,18 +855,15 @@ async function api(
       "Bearer " + auth
   };
 
-  options.cache =
-    "no-store";
+  options.cache = "no-store";
 
-  return fetch(
-    url,
-    options
-  );
+  return fetch(url, options);
+
 }
 
 
 // =========================
-// LOAD DATA
+// Load dashboard
 // =========================
 
 async function loadData() {
@@ -939,9 +877,7 @@ async function loadData() {
       );
 
 
-    if (
-      response.status === 401
-    ) {
+    if (response.status === 401) {
 
       auth = "";
 
@@ -983,18 +919,20 @@ async function loadData() {
       .textContent =
         data.requests ?? 0;
 
+    document
+      .getElementById("visitors")
+      .textContent =
+        data.visitors ?? 0;
 
     document
       .getElementById("countries")
       .textContent =
         data.countries ?? 0;
 
-
     document
       .getElementById("suspicious")
       .textContent =
         data.suspicious ?? 0;
-
 
     document
       .getElementById("blocked")
@@ -1002,9 +940,9 @@ async function loadData() {
         data.blocked ?? 0;
 
 
-    const events =
-      Array.isArray(data.events)
-        ? data.events
+    const visitors =
+      Array.isArray(data.visitorsList)
+        ? data.visitorsList
         : [];
 
 
@@ -1018,43 +956,153 @@ async function loadData() {
       new Set(blockedIPs);
 
 
-    // =========================
-    // IP LIST
-    // =========================
+    // =====================
+    // Visitors
+    // =====================
 
-    const ipMap =
-      new Map();
+    const visitorTable =
+      document.getElementById(
+        "visitorTable"
+      );
+
+    visitorTable.innerHTML = "";
 
 
-    for (
-      const event of events
-    ) {
+    if (visitors.length === 0) {
 
-      if (!event.ip) {
-        continue;
-      }
+      const tr =
+        document.createElement("tr");
 
-      if (
-        !ipMap.has(event.ip)
-      ) {
+      const td =
+        document.createElement("td");
 
-        ipMap.set(
-          event.ip,
-          event
-        );
+      td.colSpan = 6;
+
+      td.textContent =
+        "هنوز بازدیدی ثبت نشده است.";
+
+      tr.appendChild(td);
+      visitorTable.appendChild(tr);
+
+    } else {
+
+      for (const visitor of visitors) {
+
+        const tr =
+          document.createElement("tr");
+
+
+        const values = [
+
+          visitor.ip,
+
+          visitor.country || "XX",
+
+          visitor.path || "/",
+
+          visitor.time
+            ? new Date(
+                visitor.time
+              ).toLocaleString()
+            : "",
+
+          blockedSet.has(visitor.ip)
+            ? "🚫 Blocked"
+            : "🟢 Normal"
+
+        ];
+
+
+        for (const value of values) {
+
+          const td =
+            document.createElement("td");
+
+          td.textContent =
+            value ?? "";
+
+          if (
+            typeof value === "string" &&
+            /^[0-9a-fA-F:.]+$/.test(value)
+          ) {
+            td.className = "ip";
+          }
+
+          tr.appendChild(td);
+
+        }
+
+
+        const actionTD =
+          document.createElement("td");
+
+
+        const button =
+          document.createElement("button");
+
+
+        button.type = "button";
+
+
+        if (blockedSet.has(visitor.ip)) {
+
+          button.className = "success";
+          button.textContent = "🟢 Unblock";
+
+          button.addEventListener(
+            "click",
+            () => unblockIP(visitor.ip)
+          );
+
+        } else {
+
+          button.className = "danger";
+          button.textContent = "🚫 Block";
+
+          button.addEventListener(
+            "click",
+            () => blockIP(visitor.ip)
+          );
+
+        }
+
+
+        actionTD.appendChild(button);
+        tr.appendChild(actionTD);
+
+        visitorTable.appendChild(tr);
 
       }
 
     }
 
 
-    for (
-      const ip of blockedIPs
-    ) {
+    // =====================
+    // IP Security List
+    // =====================
 
-      if (
-        !ipMap.has(ip)
-      ) {
+    const ipMap = new Map();
+
+
+    for (const visitor of visitors) {
+
+      if (!visitor.ip) {
+        continue;
+      }
+
+      if (!ipMap.has(visitor.ip)) {
+        ipMap.set(
+          visitor.ip,
+          visitor
+        );
+      }
+
+    }
+
+
+    for (const ip of blockedIPs) {
+
+      if (!ipMap.has(ip)) {
 
         ipMap.set(
           ip,
@@ -1070,29 +1118,20 @@ async function loadData() {
 
 
     const ipTable =
-      document
-        .getElementById(
-          "ipTable"
-        );
+      document.getElementById(
+        "ipTable"
+      );
+
+    ipTable.innerHTML = "";
 
 
-    ipTable.innerHTML =
-      "";
-
-
-    if (
-      ipMap.size === 0
-    ) {
+    if (ipMap.size === 0) {
 
       const tr =
-        document.createElement(
-          "tr"
-        );
+        document.createElement("tr");
 
       const td =
-        document.createElement(
-          "td"
-        );
+        document.createElement("td");
 
       td.colSpan = 4;
 
@@ -1100,74 +1139,54 @@ async function loadData() {
         "هنوز IP ثبت‌شده‌ای وجود ندارد.";
 
       tr.appendChild(td);
-
       ipTable.appendChild(tr);
 
     } else {
 
       for (
-        const [ip, event]
+        const [ip, visitor]
         of ipMap
       ) {
 
         const tr =
-          document.createElement(
-            "tr"
-          );
+          document.createElement("tr");
 
 
         const ipTD =
-          document.createElement(
-            "td"
-          );
+          document.createElement("td");
 
-        ipTD.textContent =
-          ip;
-
-        ipTD.className =
-          "ip";
+        ipTD.textContent = ip;
+        ipTD.className = "ip";
 
 
         const countryTD =
-          document.createElement(
-            "td"
-          );
+          document.createElement("td");
 
         countryTD.textContent =
-          event.country ||
-          "XX";
+          visitor.country || "XX";
 
 
         const statusTD =
-          document.createElement(
-            "td"
-          );
+          document.createElement("td");
 
 
         const actionTD =
-          document.createElement(
-            "td"
-          );
+          document.createElement("td");
 
 
-        if (
-          blockedSet.has(ip)
-        ) {
+        const button =
+          document.createElement("button");
+
+        button.type = "button";
+
+
+        if (blockedSet.has(ip)) {
 
           statusTD.textContent =
             "🚫 Blocked";
 
           statusTD.className =
             "status-blocked";
-
-
-          const button =
-            document.createElement(
-              "button"
-            );
-
-          button.type =
-            "button";
 
           button.className =
             "success";
@@ -1180,10 +1199,6 @@ async function loadData() {
             () => unblockIP(ip)
           );
 
-          actionTD.appendChild(
-            button
-          );
-
         } else {
 
           statusTD.textContent =
@@ -1191,15 +1206,6 @@ async function loadData() {
 
           statusTD.className =
             "status-normal";
-
-
-          const button =
-            document.createElement(
-              "button"
-            );
-
-          button.type =
-            "button";
 
           button.className =
             "danger";
@@ -1212,67 +1218,48 @@ async function loadData() {
             () => blockIP(ip)
           );
 
-          actionTD.appendChild(
-            button
-          );
-
         }
 
 
-        tr.appendChild(
-          ipTD
-        );
+        actionTD.appendChild(button);
 
-        tr.appendChild(
-          countryTD
-        );
+        tr.appendChild(ipTD);
+        tr.appendChild(countryTD);
+        tr.appendChild(statusTD);
+        tr.appendChild(actionTD);
 
-        tr.appendChild(
-          statusTD
-        );
-
-        tr.appendChild(
-          actionTD
-        );
-
-
-        ipTable.appendChild(
-          tr
-        );
+        ipTable.appendChild(tr);
 
       }
 
     }
 
 
-    // =========================
-    // EVENTS
-    // =========================
+    // =====================
+    // Security Events
+    // =====================
+
+    const events =
+      Array.isArray(data.events)
+        ? data.events
+        : [];
+
 
     const eventsBody =
-      document
-        .getElementById(
-          "events"
-        );
+      document.getElementById(
+        "events"
+      );
+
+    eventsBody.innerHTML = "";
 
 
-    eventsBody.innerHTML =
-      "";
-
-
-    if (
-      events.length === 0
-    ) {
+    if (events.length === 0) {
 
       const tr =
-        document.createElement(
-          "tr"
-        );
+        document.createElement("tr");
 
       const td =
-        document.createElement(
-          "td"
-        );
+        document.createElement("td");
 
       td.colSpan = 5;
 
@@ -1280,21 +1267,14 @@ async function loadData() {
         "هنوز رویداد امنیتی ثبت نشده است.";
 
       tr.appendChild(td);
-
-      eventsBody.appendChild(
-        tr
-      );
+      eventsBody.appendChild(tr);
 
     } else {
 
-      for (
-        const event of events
-      ) {
+      for (const event of events) {
 
         const tr =
-          document.createElement(
-            "tr"
-          );
+          document.createElement("tr");
 
 
         const values = [
@@ -1316,14 +1296,10 @@ async function loadData() {
         ];
 
 
-        for (
-          const value of values
-        ) {
+        for (const value of values) {
 
           const td =
-            document.createElement(
-              "td"
-            );
+            document.createElement("td");
 
           td.textContent =
             value ?? "";
@@ -1332,10 +1308,7 @@ async function loadData() {
 
         }
 
-
-        eventsBody.appendChild(
-          tr
-        );
+        eventsBody.appendChild(tr);
 
       }
 
@@ -1355,7 +1328,7 @@ async function loadData() {
 
 
 // =========================
-// BLOCK
+// Block
 // =========================
 
 async function blockIP(ip) {
@@ -1367,11 +1340,10 @@ async function blockIP(ip) {
 
   if (
     !confirm(
-      "آیا مطمئنی می‌خواهی این IP مسدود شود؟\\n\\n" +
+      "آیا مطمئنی می‌خواهی این IP مسدود شود؟\n\n" +
       ip
     )
   ) {
-
     return;
   }
 
@@ -1427,7 +1399,7 @@ async function blockIP(ip) {
 
 
 // =========================
-// UNBLOCK
+// Unblock
 // =========================
 
 async function unblockIP(ip) {
@@ -1439,11 +1411,10 @@ async function unblockIP(ip) {
 
   if (
     !confirm(
-      "آیا می‌خواهی این IP آزاد شود؟\\n\\n" +
+      "آیا می‌خواهی این IP آزاد شود؟\n\n" +
       ip
     )
   ) {
-
     return;
   }
 
@@ -1499,7 +1470,7 @@ async function unblockIP(ip) {
 
 
 // =========================
-// MANUAL BLOCK
+// Manual Block
 // =========================
 
 async function blockManual() {
@@ -1532,17 +1503,11 @@ async function blockManual() {
 
 function validIPClient(ip) {
 
-  if (!ip) {
+  if (!ip || ip.length > 100) {
     return false;
   }
 
-  if (ip.length > 100) {
-    return false;
-  }
-
-  return /^[0-9a-fA-F:.]+$/.test(
-    ip
-  );
+  return /^[0-9a-fA-F:.]+$/.test(ip);
 
 }
 
@@ -1569,7 +1534,6 @@ document
 </script>
 
 </body>
-
 </html>`,
     {
       headers: {
@@ -1585,15 +1549,12 @@ document
 
 
 // =========================
-// WORKER
+// Worker
 // =========================
 
 export default {
 
-  async fetch(
-    request,
-    env
-  ) {
+  async fetch(request, env) {
 
     const url =
       new URL(request.url);
@@ -1605,13 +1566,12 @@ export default {
       getCountry(request);
 
 
-    // =========================
-    // SECURITY DASHBOARD
-    // =========================
+    // =====================
+    // Security Dashboard
+    // =====================
 
     if (
-      url.pathname ===
-      "/security"
+      url.pathname === "/security"
     ) {
 
       return securityDashboard();
@@ -1619,9 +1579,9 @@ export default {
     }
 
 
-    // =========================
-    // ADMIN API
-    // =========================
+    // =====================
+    // Admin API
+    // =====================
 
     if (
       url.pathname.startsWith(
@@ -1629,14 +1589,11 @@ export default {
       )
     ) {
 
-      if (
-        !checkAdmin(request)
-      ) {
+      if (!checkAdmin(request)) {
 
         return json(
           {
-            error:
-              "Unauthorized"
+            error: "Unauthorized"
           },
           401
         );
@@ -1644,9 +1601,7 @@ export default {
       }
 
 
-      // =========================
       // STATS
-      // =========================
 
       if (
         url.pathname ===
@@ -1654,24 +1609,22 @@ export default {
         request.method === "GET"
       ) {
 
+        const visitors =
+          await getVisitors(env);
+
         const events =
-          await getRecentEvents(
-            env
-          );
+          await getRecentEvents(env);
 
-
-        const blocked =
-          await listBlockedIPs(
-            env
-          );
+        const blockedIPs =
+          await listBlockedIPs(env);
 
 
         const countries =
           new Set(
-            events
+            visitors
               .map(
-                event =>
-                  event.country
+                visitor =>
+                  visitor.country
               )
               .filter(Boolean)
           );
@@ -1686,8 +1639,13 @@ export default {
 
         return json({
 
+          // تعداد IPهای ثبت‌شده
           requests:
-            events.length,
+            visitors.length,
+
+          // تعداد بازدیدکننده‌های ثبت‌شده
+          visitors:
+            visitors.length,
 
           countries:
             countries.size,
@@ -1696,10 +1654,12 @@ export default {
             suspicious.length,
 
           blocked:
-            blocked.length,
+            blockedIPs.length,
 
-          blockedIPs:
-            blocked,
+          blockedIPs,
+
+          visitorsList:
+            visitors,
 
           events
 
@@ -1708,9 +1668,7 @@ export default {
       }
 
 
-      // =========================
-      // BLOCK API
-      // =========================
+      // BLOCK
 
       if (
         url.pathname ===
@@ -1744,9 +1702,7 @@ export default {
             : "";
 
 
-        if (
-          !validIP(targetIP)
-        ) {
+        if (!validIP(targetIP)) {
 
           return json(
             {
@@ -1788,9 +1744,7 @@ export default {
       }
 
 
-      // =========================
-      // UNBLOCK API
-      // =========================
+      // UNBLOCK
 
       if (
         url.pathname ===
@@ -1824,9 +1778,7 @@ export default {
             : "";
 
 
-        if (
-          !validIP(targetIP)
-        ) {
+        if (!validIP(targetIP)) {
 
           return json(
             {
@@ -1879,9 +1831,9 @@ export default {
     }
 
 
-    // =========================
-    // BLOCKED IP
-    // =========================
+    // =====================
+    // Blocked IP
+    // =====================
 
     if (
       await isBlocked(
@@ -1908,9 +1860,9 @@ export default {
     }
 
 
-    // =========================
-    // RATE LIMIT
-    // =========================
+    // =====================
+    // Rate Limit
+    // =====================
 
     if (
       rateLimited(ip)
@@ -1920,8 +1872,8 @@ export default {
         env,
         {
           time: Date.now(),
-          ip: ip,
-          country: country,
+          ip,
+          country,
           path: url.pathname,
           method: request.method,
           suspicious: true,
@@ -1936,8 +1888,7 @@ export default {
           status: 429,
 
           headers: {
-            "retry-after":
-              "60"
+            "retry-after": "60"
           }
         }
       );
@@ -1945,9 +1896,9 @@ export default {
     }
 
 
-    // =========================
-    // SUSPICIOUS REQUEST
-    // =========================
+    // =====================
+    // Suspicious
+    // =====================
 
     const suspicious =
       isSuspicious(
@@ -1961,8 +1912,8 @@ export default {
         env,
         {
           time: Date.now(),
-          ip: ip,
-          country: country,
+          ip,
+          country,
           path: url.pathname,
           method: request.method,
           suspicious: true,
@@ -1986,9 +1937,29 @@ export default {
     }
 
 
-    // =========================
-    // NORMAL REQUEST
-    // =========================
+    // =====================
+    // NORMAL VISITOR
+    // =====================
+
+    // این قسمت جدید است:
+    // بازدید عادی هم ثبت می‌شود.
+
+    await saveVisitor(
+      env,
+      {
+        time: Date.now(),
+        ip,
+        country,
+        path: url.pathname,
+        method: request.method,
+        status: "NORMAL"
+      }
+    );
+
+
+    // =====================
+    // Serve website
+    // =====================
 
     return env.ASSETS.fetch(
       request
