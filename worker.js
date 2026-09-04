@@ -3,9 +3,6 @@ const ADMIN_TOKEN = "SepehrSky.1394.sepehr";
 const RATE_LIMIT = 120;
 const RATE_WINDOW_MS = 60_000;
 
-const VISITOR_TTL = 60 * 60 * 24 * 7;
-const ONLINE_WINDOW = 90_000;
-
 const suspiciousPatterns = [
   "/.env",
   "/.git/",
@@ -22,7 +19,7 @@ const rateMap = new Map();
 
 
 // =========================
-// Helpers
+// JSON RESPONSE
 // =========================
 
 function json(data, status = 200) {
@@ -31,15 +28,17 @@ function json(data, status = 200) {
     {
       status,
       headers: {
-        "content-type":
-          "application/json; charset=UTF-8",
-        "cache-control":
-          "no-store"
+        "content-type": "application/json; charset=UTF-8",
+        "cache-control": "no-store"
       }
     }
   );
 }
 
+
+// =========================
+// IP
+// =========================
 
 function getIP(request) {
   return (
@@ -50,14 +49,21 @@ function getIP(request) {
 }
 
 
+// =========================
+// COUNTRY
+// =========================
+
 function getCountry(request) {
   return (
     request.headers.get("CF-IPCountry") ||
-    request.cf?.country ||
     "XX"
   );
 }
 
+
+// =========================
+// SUSPICIOUS PATH
+// =========================
 
 function isSuspicious(path) {
   const p = path.toLowerCase();
@@ -69,29 +75,21 @@ function isSuspicious(path) {
 }
 
 
-function validIP(ip) {
-  if (typeof ip !== "string") {
-    return false;
-  }
-
-  const value = ip.trim();
-
-  if (!value || value.length > 100) {
-    return false;
-  }
-
-  return /^[0-9a-fA-F:.]+$/.test(value);
-}
-
+// =========================
+// RATE LIMIT
+// =========================
 
 function rateLimited(ip) {
+
   const now = Date.now();
+
   const item = rateMap.get(ip);
 
   if (
     !item ||
     now - item.start > RATE_WINDOW_MS
   ) {
+
     rateMap.set(ip, {
       start: now,
       count: 1
@@ -106,17 +104,8 @@ function rateLimited(ip) {
 }
 
 
-function checkAdmin(request) {
-  const authorization =
-    request.headers.get("Authorization") || "";
-
-  return authorization ===
-    `Bearer ${ADMIN_TOKEN}`;
-}
-
-
 // =========================
-// Block System
+// CHECK BLOCK
 // =========================
 
 async function isBlocked(env, ip) {
@@ -137,130 +126,8 @@ async function isBlocked(env, ip) {
 }
 
 
-async function blockIP(env, ip) {
-
-  if (!env.SECURITY_KV) {
-    throw new Error(
-      "SECURITY_KV is not configured."
-    );
-  }
-
-  await env.SECURITY_KV.put(
-    `block:${ip}`,
-    "1"
-  );
-}
-
-
-async function unblockIP(env, ip) {
-
-  if (!env.SECURITY_KV) {
-    throw new Error(
-      "SECURITY_KV is not configured."
-    );
-  }
-
-  await env.SECURITY_KV.delete(
-    `block:${ip}`
-  );
-}
-
-
-async function listBlockedIPs(env) {
-
-  if (!env.SECURITY_KV) {
-    return [];
-  }
-
-  const result =
-    await env.SECURITY_KV.list({
-      prefix: "block:",
-      limit: 100
-    });
-
-  return result.keys.map(
-    key =>
-      key.name.substring(6)
-  );
-}
-
-
 // =========================
-// Visitor System
-// =========================
-
-async function saveVisitor(
-  env,
-  visitor
-) {
-
-  if (
-    !env.SECURITY_KV ||
-    visitor.ip === "unknown"
-  ) {
-    return;
-  }
-
-  await env.SECURITY_KV.put(
-    `visitor:${visitor.ip}`,
-    JSON.stringify(visitor),
-    {
-      expirationTtl:
-        VISITOR_TTL
-    }
-  );
-}
-
-
-async function getVisitors(env) {
-
-  if (!env.SECURITY_KV) {
-    return [];
-  }
-
-  const result =
-    await env.SECURITY_KV.list({
-      prefix: "visitor:",
-      limit: 100
-    });
-
-  const visitors = [];
-
-  for (
-    const key of result.keys
-  ) {
-
-    const value =
-      await env.SECURITY_KV.get(
-        key.name
-      );
-
-    if (!value) {
-      continue;
-    }
-
-    try {
-
-      visitors.push(
-        JSON.parse(value)
-      );
-
-    } catch {}
-
-  }
-
-  visitors.sort(
-    (a, b) =>
-      (b.time || 0) -
-      (a.time || 0)
-  );
-
-  return visitors.slice(0, 100);
-}
-
-
-// =========================
-// Security Events
+// SAVE SECURITY EVENT
 // =========================
 
 async function saveSecurityEvent(
@@ -286,6 +153,74 @@ async function saveSecurityEvent(
 }
 
 
+// =========================
+// BLOCK IP
+// =========================
+
+async function blockIP(env, ip) {
+
+  if (!env.SECURITY_KV) {
+
+    throw new Error(
+      "SECURITY_KV is not configured."
+    );
+  }
+
+  await env.SECURITY_KV.put(
+    `block:${ip}`,
+    "1"
+  );
+}
+
+
+// =========================
+// UNBLOCK IP
+// =========================
+
+async function unblockIP(env, ip) {
+
+  if (!env.SECURITY_KV) {
+
+    throw new Error(
+      "SECURITY_KV is not configured."
+    );
+  }
+
+  await env.SECURITY_KV.delete(
+    `block:${ip}`
+  );
+}
+
+
+// =========================
+// LIST BLOCKED IPS
+// =========================
+
+async function listBlockedIPs(env) {
+
+  if (!env.SECURITY_KV) {
+    return [];
+  }
+
+  const result =
+    await env.SECURITY_KV.list({
+      prefix: "block:",
+      limit: 100
+    });
+
+  return result.keys.map(
+    key =>
+      key.name.substring(
+        "block:".length
+      )
+  );
+}
+
+
+// =========================
+// RECENT EVENTS
+// =========================
+
 async function getRecentEvents(env) {
 
   if (!env.SECURITY_KV) {
@@ -300,9 +235,7 @@ async function getRecentEvents(env) {
 
   const events = [];
 
-  for (
-    const key of result.keys
-  ) {
+  for (const key of result.keys) {
 
     const value =
       await env.SECURITY_KV.get(
@@ -319,8 +252,9 @@ async function getRecentEvents(env) {
         JSON.parse(value)
       );
 
-    } catch {}
-
+    } catch {
+      // Ignore invalid event
+    }
   }
 
   events.sort(
@@ -334,7 +268,53 @@ async function getRecentEvents(env) {
 
 
 // =========================
-// Dashboard
+// ADMIN AUTH
+// =========================
+
+function checkAdmin(request) {
+
+  const authorization =
+    request.headers.get(
+      "Authorization"
+    ) || "";
+
+  return (
+    authorization ===
+    `Bearer ${ADMIN_TOKEN}`
+  );
+}
+
+
+// =========================
+// VALID IP
+// =========================
+
+function validIP(ip) {
+
+  if (
+    typeof ip !== "string"
+  ) {
+    return false;
+  }
+
+  const value =
+    ip.trim();
+
+  if (
+    !value ||
+    value.length > 100
+  ) {
+    return false;
+  }
+
+  return /^[0-9a-fA-F:.]+$/.test(
+    value
+  );
+}
+
+
+// =========================
+// SECURITY DASHBOARD
 // =========================
 
 function securityDashboard() {
@@ -363,26 +343,15 @@ function securityDashboard() {
 
 body {
   margin: 0;
-  font-family:
-    Arial,
-    sans-serif;
-
-  background:
-    #07111f;
-
-  color:
-    white;
+  font-family: Arial, sans-serif;
+  background: #07111f;
+  color: white;
 }
 
 header {
-  padding:
-    24px;
-
-  background:
-    #0c1b2e;
-
-  border-bottom:
-    1px solid #20344d;
+  padding: 24px;
+  background: #0c1b2e;
+  border-bottom: 1px solid #20344d;
 }
 
 h1 {
@@ -390,275 +359,145 @@ h1 {
 }
 
 main {
-  max-width:
-    1200px;
-
-  margin:
-    auto;
-
-  padding:
-    20px;
+  max-width: 1150px;
+  margin: auto;
+  padding: 20px;
 }
 
 .login,
 .panel {
-  background:
-    #0c1b2e;
-
-  border:
-    1px solid #20344d;
-
-  border-radius:
-    18px;
-
-  padding:
-    20px;
-
-  margin-bottom:
-    20px;
+  background: #0c1b2e;
+  border: 1px solid #20344d;
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 20px;
 }
 
 input {
-  width:
-    100%;
+  width: 100%;
+  padding: 13px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: 1px solid #304967;
+  background: #07111f;
+  color: white;
+  outline: none;
+}
 
-  padding:
-    13px;
-
-  margin:
-    8px 0;
-
-  border-radius:
-    10px;
-
-  border:
-    1px solid #304967;
-
-  background:
-    #07111f;
-
-  color:
-    white;
-
-  outline:
-    none;
+input:focus {
+  border-color: #4c91d9;
 }
 
 button {
-  border:
-    0;
-
-  border-radius:
-    10px;
-
-  padding:
-    11px 16px;
-
-  cursor:
-    pointer;
-
-  margin:
-    4px;
-
-  font-weight:
-    bold;
-
-  touch-action:
-    manipulation;
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 16px;
+  cursor: pointer;
+  margin: 4px;
+  font-weight: bold;
 }
 
 button:disabled {
-  opacity:
-    .5;
-
-  cursor:
-    not-allowed;
+  opacity: .5;
+  cursor: not-allowed;
 }
 
 .grid {
-  display:
-    grid;
-
+  display: grid;
   grid-template-columns:
-    repeat(
-      auto-fit,
-      minmax(170px,1fr)
-    );
-
-  gap:
-    15px;
-
-  margin-bottom:
-    20px;
+    repeat(auto-fit,minmax(180px,1fr));
+  gap: 15px;
 }
 
 .card {
-  background:
-    #101f33;
-
-  border-radius:
-    15px;
-
-  padding:
-    20px;
+  background: #101f33;
+  border-radius: 15px;
+  padding: 20px;
 }
 
 .number {
-  font-size:
-    30px;
-
-  font-weight:
-    bold;
-
-  margin-top:
-    8px;
-}
-
-.online {
-  color:
-    #55e69b;
-}
-
-.offline {
-  color:
-    #8996a8;
+  font-size: 30px;
+  font-weight: bold;
+  margin-top: 8px;
 }
 
 .table-wrap {
-  width:
-    100%;
-
-  overflow-x:
-    auto;
+  width: 100%;
+  overflow-x: auto;
 }
 
 table {
-  width:
-    100%;
-
-  border-collapse:
-    collapse;
-
-  min-width:
-    850px;
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 750px;
 }
 
 th,
 td {
-  text-align:
-    right;
-
-  padding:
-    11px;
-
-  border-bottom:
-    1px solid #20344d;
+  text-align: right;
+  padding: 11px;
+  border-bottom: 1px solid #20344d;
 }
 
 th {
-  color:
-    #8db7df;
+  color: #8db7df;
 }
 
 .small {
-  opacity:
-    .7;
-
-  font-size:
-    13px;
+  opacity: .7;
+  font-size: 13px;
 }
 
 .hidden {
-  display:
-    none !important;
+  display: none !important;
 }
 
 .danger {
-  background:
-    #8b2635;
-
-  color:
-    white;
+  background: #8b2635;
+  color: white;
 }
 
 .success {
-  background:
-    #16794b;
-
-  color:
-    white;
+  background: #16794b;
+  color: white;
 }
 
 .refresh {
-  background:
-    #24486b;
-
-  color:
-    white;
+  background: #24486b;
+  color: white;
 }
 
 .status-normal {
-  color:
-    #55e69b;
-
-  font-weight:
-    bold;
+  color: #55e69b;
+  font-weight: bold;
 }
 
 .status-blocked {
-  color:
-    #ff7184;
-
-  font-weight:
-    bold;
+  color: #ff7184;
+  font-weight: bold;
 }
 
 .ip {
-  direction:
-    ltr;
-
-  text-align:
-    right;
-
-  font-family:
-    monospace;
+  direction: ltr;
+  text-align: right;
+  font-family: monospace;
 }
 
 #loginMsg {
-  color:
-    #ff7184;
-
-  min-height:
-    20px;
+  color: #ff7184;
+  min-height: 20px;
 }
 
 #toast {
-  position:
-    fixed;
-
-  bottom:
-    20px;
-
-  left:
-    20px;
-
-  background:
-    #10243b;
-
-  border:
-    1px solid #31506f;
-
-  padding:
-    14px 18px;
-
-  border-radius:
-    12px;
-
-  display:
-    none;
-
-  z-index:
-    9999;
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: #10243b;
+  border: 1px solid #31506f;
+  padding: 14px 18px;
+  border-radius: 12px;
+  display: none;
+  z-index: 9999;
 }
 
 </style>
@@ -686,7 +525,7 @@ Private security dashboard
 
 <h2>🔐 ورود مدیر</h2>
 
-<div id="loginForm">
+<form id="loginForm">
 
 <input
   id="token"
@@ -697,12 +536,12 @@ Private security dashboard
 
 <button
   id="loginButton"
-  type="button"
+  type="submit"
 >
 🔐 ورود
 </button>
 
-</div>
+</form>
 
 <p id="loginMsg"></p>
 
@@ -718,25 +557,11 @@ Private security dashboard
 
 <div class="card">
 
-👥 Visitors
+👥 Requests
 
 <div
-  id="visitors"
+  id="requests"
   class="number"
->
-—
-</div>
-
-</div>
-
-
-<div class="card">
-
-🟢 Online
-
-<div
-  id="online"
-  class="number online"
 >
 —
 </div>
@@ -820,45 +645,13 @@ Private security dashboard
 
 <div class="panel">
 
-<h2>👥 بازدیدکنندگان</h2>
+<h2>🌐 IP Security List</h2>
 
 <div class="small">
-🟢 Online یعنی در ۹۰ ثانیه اخیر heartbeat دریافت شده است.
+از این قسمت می‌توانی IPهای ثبت‌شده را مدیریت کنی.
 </div>
 
 <br>
-
-<div class="table-wrap">
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>IP</th>
-<th>Country</th>
-<th>Status</th>
-<th>Last Activity</th>
-<th>Path</th>
-<th>Action</th>
-
-</tr>
-
-</thead>
-
-<tbody id="visitorTable"></tbody>
-
-</table>
-
-</div>
-
-</div>
-
-
-<div class="panel">
-
-<h2>🛡️ IP Security List</h2>
 
 <div class="table-wrap">
 
@@ -947,20 +740,20 @@ function showToast(message) {
       "none";
 
   }, 2500);
-
 }
 
 
 // =========================
-// Login
+// LOGIN
 // =========================
 
 async function login() {
 
-  const input =
-    document.getElementById(
-      "token"
-    );
+  const token =
+    document
+      .getElementById("token")
+      .value
+      .trim();
 
   const msg =
     document.getElementById(
@@ -972,26 +765,21 @@ async function login() {
       "loginButton"
     );
 
-  const token =
-    input.value.trim();
-
-
   if (!token) {
 
     msg.textContent =
       "⚠️ توکن را وارد کن";
 
     return;
-
   }
-
 
   button.disabled =
     true;
 
   button.textContent =
-    "⏳ بررسی...";
+    "⏳ در حال بررسی...";
 
+  msg.textContent = "";
 
   try {
 
@@ -1000,8 +788,7 @@ async function login() {
         "/api/security/stats?t=" +
         Date.now(),
         {
-          method:
-            "GET",
+          method: "GET",
 
           headers: {
             "Authorization":
@@ -1011,50 +798,66 @@ async function login() {
               "no-cache"
           },
 
-          cache:
-            "no-store"
+          cache: "no-store"
         }
       );
 
 
     if (!response.ok) {
 
-      msg.textContent =
+      if (
         response.status === 401
-          ? "❌ توکن اشتباه است"
-          : "❌ خطای سرور: " +
-            response.status;
+      ) {
+
+        msg.textContent =
+          "❌ توکن اشتباه است";
+
+      } else {
+
+        msg.textContent =
+          "❌ خطای سرور: " +
+          response.status;
+
+      }
+
+      auth = "";
 
       return;
-
     }
 
 
-    await response.json();
+    const data =
+      await response.json();
 
 
-    auth =
-      token;
+    if (
+      !data ||
+      typeof data !== "object"
+    ) {
+
+      msg.textContent =
+        "❌ پاسخ نامعتبر از سرور";
+
+      return;
+    }
+
+
+    auth = token;
 
 
     document
-      .getElementById(
-        "login"
-      )
+      .getElementById("login")
       .classList
       .add("hidden");
 
 
     document
-      .getElementById(
-        "dashboard"
-      )
+      .getElementById("dashboard")
       .classList
       .remove("hidden");
 
 
     await loadData();
-
 
   } catch (error) {
 
@@ -1062,6 +865,8 @@ async function login() {
 
     msg.textContent =
       "❌ خطا در اتصال به Worker";
+
+    auth = "";
 
   } finally {
 
@@ -1076,13 +881,20 @@ async function login() {
 }
 
 
+// مهم:
+// ورود با Enter هم کار می‌کند.
+
 document
-  .getElementById(
-    "loginButton"
-  )
+  .getElementById("loginForm")
   .addEventListener(
-    "click",
-    login
+    "submit",
+    function(event) {
+
+      event.preventDefault();
+
+      login();
+
+    }
   );
 
 
@@ -1109,12 +921,11 @@ async function api(
     url,
     options
   );
-
 }
 
 
 // =========================
-// Load
+// LOAD DATA
 // =========================
 
 async function loadData() {
@@ -1135,21 +946,21 @@ async function loadData() {
       auth = "";
 
       document
-        .getElementById(
-          "dashboard"
-        )
+        .getElementById("dashboard")
         .classList
         .add("hidden");
 
       document
-        .getElementById(
-          "login"
-        )
+        .getElementById("login")
         .classList
         .remove("hidden");
 
-      return;
+      document
+        .getElementById("loginMsg")
+        .textContent =
+          "❌ نشست مدیر معتبر نیست";
 
+      return;
     }
 
 
@@ -1160,7 +971,6 @@ async function loadData() {
       );
 
       return;
-
     }
 
 
@@ -1169,81 +979,110 @@ async function loadData() {
 
 
     document
-      .getElementById(
-        "visitors"
-      )
+      .getElementById("requests")
       .textContent =
-        data.visitors ?? 0;
+        data.requests ?? 0;
 
 
     document
-      .getElementById(
-        "online"
-      )
-      .textContent =
-        data.online ?? 0;
-
-
-    document
-      .getElementById(
-        "countries"
-      )
+      .getElementById("countries")
       .textContent =
         data.countries ?? 0;
 
 
     document
-      .getElementById(
-        "suspicious"
-      )
+      .getElementById("suspicious")
       .textContent =
         data.suspicious ?? 0;
 
 
     document
-      .getElementById(
-        "blocked"
-      )
+      .getElementById("blocked")
       .textContent =
         data.blocked ?? 0;
 
 
-    const visitors =
-      Array.isArray(
-        data.visitorsList
-      )
-        ? data.visitorsList
+    const events =
+      Array.isArray(data.events)
+        ? data.events
         : [];
 
 
     const blockedIPs =
-      Array.isArray(
-        data.blockedIPs
-      )
+      Array.isArray(data.blockedIPs)
         ? data.blockedIPs
         : [];
 
 
     const blockedSet =
-      new Set(
-        blockedIPs
-      );
+      new Set(blockedIPs);
 
 
-    // =====================
-    // Visitors
-    // =====================
+    // =========================
+    // IP LIST
+    // =========================
 
-    const visitorTable =
-      document.getElementById(
-        "visitorTable"
-      );
+    const ipMap =
+      new Map();
 
-    visitorTable.innerHTML =
+
+    for (
+      const event of events
+    ) {
+
+      if (!event.ip) {
+        continue;
+      }
+
+      if (
+        !ipMap.has(event.ip)
+      ) {
+
+        ipMap.set(
+          event.ip,
+          event
+        );
+
+      }
+
+    }
+
+
+    for (
+      const ip of blockedIPs
+    ) {
+
+      if (
+        !ipMap.has(ip)
+      ) {
+
+        ipMap.set(
+          ip,
+          {
+            ip: ip,
+            country: "—"
+          }
+        );
+
+      }
+
+    }
+
+
+    const ipTable =
+      document
+        .getElementById(
+          "ipTable"
+        );
+
+
+    ipTable.innerHTML =
       "";
 
 
-    if (!visitors.length) {
+    if (
+      ipMap.size === 0
+    ) {
 
       const tr =
         document.createElement(
@@ -1255,20 +1094,20 @@ async function loadData() {
           "td"
         );
 
-      td.colSpan = 6;
+      td.colSpan = 4;
 
       td.textContent =
-        "هنوز بازدیدی ثبت نشده است.";
+        "هنوز IP ثبت‌شده‌ای وجود ندارد.";
 
       tr.appendChild(td);
 
-      visitorTable.appendChild(tr);
+      ipTable.appendChild(tr);
 
     } else {
 
       for (
-        const visitor
-        of visitors
+        const [ip, event]
+        of ipMap
       ) {
 
         const tr =
@@ -1283,7 +1122,7 @@ async function loadData() {
           );
 
         ipTD.textContent =
-          visitor.ip || "unknown";
+          ip;
 
         ipTD.className =
           "ip";
@@ -1295,7 +1134,8 @@ async function loadData() {
           );
 
         countryTD.textContent =
-          visitor.country || "XX";
+          event.country ||
+          "XX";
 
 
         const statusTD =
@@ -1304,67 +1144,30 @@ async function loadData() {
           );
 
 
-        const online =
-          Date.now() -
-          (visitor.time || 0) <
-          90_000;
-
-
-        statusTD.textContent =
-          online
-            ? "🟢 Online"
-            : "⚪ Offline";
-
-
-        statusTD.className =
-          online
-            ? "status-normal"
-            : "offline";
-
-
-        const timeTD =
-          document.createElement(
-            "td"
-          );
-
-        timeTD.textContent =
-          visitor.time
-            ? new Date(
-                visitor.time
-              ).toLocaleString()
-            : "—";
-
-
-        const pathTD =
-          document.createElement(
-            "td"
-          );
-
-        pathTD.textContent =
-          visitor.path || "/";
-
-
         const actionTD =
           document.createElement(
             "td"
           );
 
 
-        const button =
-          document.createElement(
-            "button"
-          );
-
-
-        button.type =
-          "button";
-
-
         if (
-          blockedSet.has(
-            visitor.ip
-          )
+          blockedSet.has(ip)
         ) {
+
+          statusTD.textContent =
+            "🚫 Blocked";
+
+          statusTD.className =
+            "status-blocked";
+
+
+          const button =
+            document.createElement(
+              "button"
+            );
+
+          button.type =
+            "button";
 
           button.className =
             "success";
@@ -1374,13 +1177,29 @@ async function loadData() {
 
           button.addEventListener(
             "click",
-            () =>
-              unblockIP(
-                visitor.ip
-              )
+            () => unblockIP(ip)
+          );
+
+          actionTD.appendChild(
+            button
           );
 
         } else {
+
+          statusTD.textContent =
+            "🟢 Normal";
+
+          statusTD.className =
+            "status-normal";
+
+
+          const button =
+            document.createElement(
+              "button"
+            );
+
+          button.type =
+            "button";
 
           button.className =
             "danger";
@@ -1390,18 +1209,14 @@ async function loadData() {
 
           button.addEventListener(
             "click",
-            () =>
-              blockIP(
-                visitor.ip
-              )
+            () => blockIP(ip)
+          );
+
+          actionTD.appendChild(
+            button
           );
 
         }
-
-
-        actionTD.appendChild(
-          button
-        );
 
 
         tr.appendChild(
@@ -1417,19 +1232,11 @@ async function loadData() {
         );
 
         tr.appendChild(
-          timeTD
-        );
-
-        tr.appendChild(
-          pathTD
-        );
-
-        tr.appendChild(
           actionTD
         );
 
 
-        visitorTable.appendChild(
+        ipTable.appendChild(
           tr
         );
 
@@ -1438,219 +1245,24 @@ async function loadData() {
     }
 
 
-    // =====================
-    // IP Security
-    // =====================
-
-    const ipMap =
-      new Map();
-
-
-    for (
-      const visitor
-      of visitors
-    ) {
-
-      if (
-        visitor.ip &&
-        !ipMap.has(
-          visitor.ip
-        )
-      ) {
-
-        ipMap.set(
-          visitor.ip,
-          visitor
-        );
-
-      }
-
-    }
-
-
-    for (
-      const ip
-      of blockedIPs
-    ) {
-
-      if (
-        !ipMap.has(ip)
-      ) {
-
-        ipMap.set(
-          ip,
-          {
-            ip,
-            country:
-              "—"
-          }
-        );
-
-      }
-
-    }
-
-
-    const ipTable =
-      document.getElementById(
-        "ipTable"
-      );
-
-    ipTable.innerHTML =
-      "";
-
-
-    for (
-      const [ip, visitor]
-      of ipMap
-    ) {
-
-      const tr =
-        document.createElement(
-          "tr"
-        );
-
-
-      const ipTD =
-        document.createElement(
-          "td"
-        );
-
-      ipTD.textContent =
-        ip;
-
-      ipTD.className =
-        "ip";
-
-
-      const countryTD =
-        document.createElement(
-          "td"
-        );
-
-      countryTD.textContent =
-        visitor.country ||
-        "XX";
-
-
-      const statusTD =
-        document.createElement(
-          "td"
-        );
-
-
-      const actionTD =
-        document.createElement(
-          "td"
-        );
-
-
-      const button =
-        document.createElement(
-          "button"
-        );
-
-
-      button.type =
-        "button";
-
-
-      if (
-        blockedSet.has(ip)
-      ) {
-
-        statusTD.textContent =
-          "🚫 Blocked";
-
-        statusTD.className =
-          "status-blocked";
-
-        button.className =
-          "success";
-
-        button.textContent =
-          "🟢 Unblock";
-
-        button.addEventListener(
-          "click",
-          () =>
-            unblockIP(ip)
-        );
-
-      } else {
-
-        statusTD.textContent =
-          "🟢 Normal";
-
-        statusTD.className =
-          "status-normal";
-
-        button.className =
-          "danger";
-
-        button.textContent =
-          "🚫 Block";
-
-        button.addEventListener(
-          "click",
-          () =>
-            blockIP(ip)
-        );
-
-      }
-
-
-      actionTD.appendChild(
-        button
-      );
-
-
-      tr.appendChild(
-        ipTD
-      );
-
-      tr.appendChild(
-        countryTD
-      );
-
-      tr.appendChild(
-        statusTD
-      );
-
-      tr.appendChild(
-        actionTD
-      );
-
-
-      ipTable.appendChild(
-        tr
-      );
-
-    }
-
-
-    // =====================
-    // Events
-    // =====================
-
-    const events =
-      Array.isArray(
-        data.events
-      )
-        ? data.events
-        : [];
-
+    // =========================
+    // EVENTS
+    // =========================
 
     const eventsBody =
-      document.getElementById(
-        "events"
-      );
+      document
+        .getElementById(
+          "events"
+        );
+
 
     eventsBody.innerHTML =
       "";
 
 
-    if (!events.length) {
+    if (
+      events.length === 0
+    ) {
 
       const tr =
         document.createElement(
@@ -1676,8 +1288,7 @@ async function loadData() {
     } else {
 
       for (
-        const event
-        of events
+        const event of events
       ) {
 
         const tr =
@@ -1706,8 +1317,7 @@ async function loadData() {
 
 
         for (
-          const value
-          of values
+          const value of values
         ) {
 
           const td =
@@ -1731,7 +1341,6 @@ async function loadData() {
 
     }
 
-
   } catch (error) {
 
     console.error(error);
@@ -1746,7 +1355,7 @@ async function loadData() {
 
 
 // =========================
-// Block
+// BLOCK
 // =========================
 
 async function blockIP(ip) {
@@ -1758,10 +1367,11 @@ async function blockIP(ip) {
 
   if (
     !confirm(
-      "آیا مطمئنی می‌خواهی این IP مسدود شود؟\n\n" +
+      "آیا مطمئنی می‌خواهی این IP مسدود شود؟\\n\\n" +
       ip
     )
   ) {
+
     return;
   }
 
@@ -1772,8 +1382,7 @@ async function blockIP(ip) {
       await api(
         "/api/security/block",
         {
-          method:
-            "POST",
+          method: "POST",
 
           headers: {
             "Content-Type":
@@ -1782,7 +1391,7 @@ async function blockIP(ip) {
 
           body:
             JSON.stringify({
-              ip
+              ip: ip
             })
         }
       );
@@ -1804,10 +1413,12 @@ async function blockIP(ip) {
 
     }
 
-  } catch {
+  } catch (error) {
+
+    console.error(error);
 
     showToast(
-      "❌ خطا در Block"
+      "❌ خطا در Block کردن IP"
     );
 
   }
@@ -1816,7 +1427,7 @@ async function blockIP(ip) {
 
 
 // =========================
-// Unblock
+// UNBLOCK
 // =========================
 
 async function unblockIP(ip) {
@@ -1828,10 +1439,11 @@ async function unblockIP(ip) {
 
   if (
     !confirm(
-      "آیا می‌خواهی این IP آزاد شود؟\n\n" +
+      "آیا می‌خواهی این IP آزاد شود؟\\n\\n" +
       ip
     )
   ) {
+
     return;
   }
 
@@ -1842,8 +1454,7 @@ async function unblockIP(ip) {
       await api(
         "/api/security/unblock",
         {
-          method:
-            "POST",
+          method: "POST",
 
           headers: {
             "Content-Type":
@@ -1852,7 +1463,7 @@ async function unblockIP(ip) {
 
           body:
             JSON.stringify({
-              ip
+              ip: ip
             })
         }
       );
@@ -1874,10 +1485,12 @@ async function unblockIP(ip) {
 
     }
 
-  } catch {
+  } catch (error) {
+
+    console.error(error);
 
     showToast(
-      "❌ خطا در Unblock"
+      "❌ خطا در Unblock کردن IP"
     );
 
   }
@@ -1886,7 +1499,7 @@ async function unblockIP(ip) {
 
 
 // =========================
-// Manual Block
+// MANUAL BLOCK
 // =========================
 
 async function blockManual() {
@@ -1900,16 +1513,13 @@ async function blockManual() {
     input.value.trim();
 
 
-  if (
-    !validIPClient(ip)
-  ) {
+  if (!validIPClient(ip)) {
 
     showToast(
       "⚠️ IP معتبر وارد کن"
     );
 
     return;
-
   }
 
 
@@ -1922,10 +1532,11 @@ async function blockManual() {
 
 function validIPClient(ip) {
 
-  if (
-    !ip ||
-    ip.length > 100
-  ) {
+  if (!ip) {
+    return false;
+  }
+
+  if (ip.length > 100) {
     return false;
   }
 
@@ -1974,15 +1585,14 @@ document
 
 
 // =========================
-// Worker
+// WORKER
 // =========================
 
 export default {
 
   async fetch(
     request,
-    env,
-    ctx
+    env
   ) {
 
     const url =
@@ -1995,9 +1605,9 @@ export default {
       getCountry(request);
 
 
-    // =====================
-    // Dashboard
-    // =====================
+    // =========================
+    // SECURITY DASHBOARD
+    // =========================
 
     if (
       url.pathname ===
@@ -2009,81 +1619,9 @@ export default {
     }
 
 
-    // =====================
-    // Heartbeat
-    // =====================
-
-    if (
-      url.pathname ===
-      "/api/presence"
-    ) {
-
-      // فقط heartbeat را ثبت می‌کنیم.
-      // اطلاعات IP در پاسخ به کاربر برگردانده نمی‌شود.
-
-      if (
-        request.method !== "POST"
-      ) {
-
-        return json(
-          {
-            error:
-              "Method not allowed"
-          },
-          405
-        );
-
-      }
-
-
-      if (
-        ip !== "unknown"
-      ) {
-
-        const visitor = {
-
-          time:
-            Date.now(),
-
-          ip:
-            ip,
-
-          country:
-            country,
-
-          path:
-            "/",
-
-          method:
-            "HEARTBEAT",
-
-          status:
-            "ONLINE"
-
-        };
-
-
-        ctx.waitUntil(
-          saveVisitor(
-            env,
-            visitor
-          )
-        );
-
-      }
-
-
-      return json({
-        success:
-          true
-      });
-
-    }
-
-
-    // =====================
-    // Admin API
-    // =====================
+    // =========================
+    // ADMIN API
+    // =========================
 
     if (
       url.pathname.startsWith(
@@ -2106,53 +1644,34 @@ export default {
       }
 
 
-      // ===================
-      // Stats
-      // ===================
+      // =========================
+      // STATS
+      // =========================
 
       if (
         url.pathname ===
           "/api/security/stats" &&
-        request.method ===
-          "GET"
+        request.method === "GET"
       ) {
-
-        const visitors =
-          await getVisitors(
-            env
-          );
 
         const events =
           await getRecentEvents(
             env
           );
 
-        const blockedIPs =
+
+        const blocked =
           await listBlockedIPs(
             env
           );
 
 
-        const now =
-          Date.now();
-
-
-        const onlineVisitors =
-          visitors.filter(
-            visitor =>
-              now -
-              (visitor.time || 0)
-              <
-              ONLINE_WINDOW
-          );
-
-
         const countries =
           new Set(
-            visitors
+            events
               .map(
-                visitor =>
-                  visitor.country
+                event =>
+                  event.country
               )
               .filter(Boolean)
           );
@@ -2167,11 +1686,8 @@ export default {
 
         return json({
 
-          visitors:
-            visitors.length,
-
-          online:
-            onlineVisitors.length,
+          requests:
+            events.length,
 
           countries:
             countries.size,
@@ -2180,12 +1696,10 @@ export default {
             suspicious.length,
 
           blocked:
-            blockedIPs.length,
+            blocked.length,
 
-          blockedIPs,
-
-          visitorsList:
-            visitors,
+          blockedIPs:
+            blocked,
 
           events
 
@@ -2194,15 +1708,14 @@ export default {
       }
 
 
-      // ===================
-      // Block
-      // ===================
+      // =========================
+      // BLOCK API
+      // =========================
 
       if (
         url.pathname ===
           "/api/security/block" &&
-        request.method ===
-          "POST"
+        request.method === "POST"
       ) {
 
         let body;
@@ -2226,8 +1739,7 @@ export default {
 
 
         const targetIP =
-          typeof body.ip ===
-            "string"
+          typeof body.ip === "string"
             ? body.ip.trim()
             : "";
 
@@ -2259,7 +1771,8 @@ export default {
           return json(
             {
               error:
-                error.message
+                error.message ||
+                "KV error"
             },
             500
           );
@@ -2268,27 +1781,21 @@ export default {
 
 
         return json({
-
-          success:
-            true,
-
-          blocked:
-            targetIP
-
+          success: true,
+          blocked: targetIP
         });
 
       }
 
 
-      // ===================
-      // Unblock
-      // ===================
+      // =========================
+      // UNBLOCK API
+      // =========================
 
       if (
         url.pathname ===
           "/api/security/unblock" &&
-        request.method ===
-          "POST"
+        request.method === "POST"
       ) {
 
         let body;
@@ -2312,8 +1819,7 @@ export default {
 
 
         const targetIP =
-          typeof body.ip ===
-            "string"
+          typeof body.ip === "string"
             ? body.ip.trim()
             : "";
 
@@ -2345,7 +1851,8 @@ export default {
           return json(
             {
               error:
-                error.message
+                error.message ||
+                "KV error"
             },
             500
           );
@@ -2354,13 +1861,8 @@ export default {
 
 
         return json({
-
-          success:
-            true,
-
-          unblocked:
-            targetIP
-
+          success: true,
+          unblocked: targetIP
         });
 
       }
@@ -2377,9 +1879,9 @@ export default {
     }
 
 
-    // =====================
-    // Blocked IP
-    // =====================
+    // =========================
+    // BLOCKED IP
+    // =========================
 
     if (
       await isBlocked(
@@ -2391,8 +1893,7 @@ export default {
       return new Response(
         "Access denied.",
         {
-          status:
-            403,
+          status: 403,
 
           headers: {
             "content-type":
@@ -2407,46 +1908,32 @@ export default {
     }
 
 
-    // =====================
-    // Rate Limit
-    // =====================
+    // =========================
+    // RATE LIMIT
+    // =========================
 
     if (
       rateLimited(ip)
     ) {
 
-      ctx.waitUntil(
-        saveSecurityEvent(
-          env,
-          {
-            time:
-              Date.now(),
-
-            ip,
-
-            country,
-
-            path:
-              url.pathname,
-
-            method:
-              request.method,
-
-            suspicious:
-              true,
-
-            status:
-              "RATE_LIMITED"
-          }
-        )
+      await saveSecurityEvent(
+        env,
+        {
+          time: Date.now(),
+          ip: ip,
+          country: country,
+          path: url.pathname,
+          method: request.method,
+          suspicious: true,
+          status: "RATE_LIMITED"
+        }
       );
 
 
       return new Response(
         "Too many requests.",
         {
-          status:
-            429,
+          status: 429,
 
           headers: {
             "retry-after":
@@ -2458,9 +1945,9 @@ export default {
     }
 
 
-    // =====================
-    // Suspicious
-    // =====================
+    // =========================
+    // SUSPICIOUS REQUEST
+    // =========================
 
     const suspicious =
       isSuspicious(
@@ -2470,38 +1957,24 @@ export default {
 
     if (suspicious) {
 
-      ctx.waitUntil(
-        saveSecurityEvent(
-          env,
-          {
-            time:
-              Date.now(),
-
-            ip,
-
-            country,
-
-            path:
-              url.pathname,
-
-            method:
-              request.method,
-
-            suspicious:
-              true,
-
-            status:
-              "SUSPICIOUS"
-          }
-        )
+      await saveSecurityEvent(
+        env,
+        {
+          time: Date.now(),
+          ip: ip,
+          country: country,
+          path: url.pathname,
+          method: request.method,
+          suspicious: true,
+          status: "SUSPICIOUS"
+        }
       );
 
 
       return new Response(
         "Request blocked.",
         {
-          status:
-            403,
+          status: 403,
 
           headers: {
             "cache-control":
@@ -2513,37 +1986,9 @@ export default {
     }
 
 
-    // =====================
-    // Normal visitor
-    // =====================
-
-    ctx.waitUntil(
-      saveVisitor(
-        env,
-        {
-          time:
-            Date.now(),
-
-          ip,
-
-          country,
-
-          path:
-            url.pathname,
-
-          method:
-            request.method,
-
-          status:
-            "NORMAL"
-        }
-      )
-    );
-
-
-    // =====================
-    // Website
-    // =====================
+    // =========================
+    // NORMAL REQUEST
+    // =========================
 
     return env.ASSETS.fetch(
       request
