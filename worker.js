@@ -1,3 +1,5 @@
+const ADMIN_TOKEN = "semfmdmdms£(#(=(449×9#";
+
 const RATE_LIMIT = 120;
 const RATE_WINDOW_MS = 60_000;
 
@@ -60,11 +62,7 @@ function rateLimited(ip) {
 
   item.count++;
 
-  if (item.count > RATE_LIMIT) {
-    return true;
-  }
-
-  return false;
+  return item.count > RATE_LIMIT;
 }
 
 async function isBlocked(env, ip) {
@@ -79,8 +77,7 @@ async function isBlocked(env, ip) {
 async function saveSecurityEvent(env, event) {
   if (!env.SECURITY_KV) return;
 
-  const id =
-    `${Date.now()}-${crypto.randomUUID()}`;
+  const id = `${Date.now()}-${crypto.randomUUID()}`;
 
   await env.SECURITY_KV.put(
     `event:${id}`,
@@ -108,6 +105,8 @@ async function unblockIP(env, ip) {
 }
 
 async function listBlockedIPs(env) {
+  if (!env.SECURITY_KV) return [];
+
   const result = await env.SECURITY_KV.list({
     prefix: "block:",
     limit: 100
@@ -119,6 +118,8 @@ async function listBlockedIPs(env) {
 }
 
 async function getRecentEvents(env) {
+  if (!env.SECURITY_KV) return [];
+
   const result = await env.SECURITY_KV.list({
     prefix: "event:",
     limit: 100
@@ -141,19 +142,15 @@ async function getRecentEvents(env) {
   return events.slice(0, 50);
 }
 
-function checkAdmin(request, env) {
-  const token = request.headers.get("Authorization");
+function checkAdmin(request) {
+  const authorization = request.headers.get("Authorization") || "";
 
-  if (!env.SECURITY_ADMIN_TOKEN) {
-    return false;
-  }
-
-  return token === `Bearer ${env.SECURITY_ADMIN_TOKEN}`;
+  return authorization === `Bearer ${ADMIN_TOKEN}`;
 }
 
 function securityDashboard() {
   return new Response(`<!doctype html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -239,7 +236,7 @@ table {
 
 th,
 td {
-  text-align: left;
+  text-align: right;
   padding: 10px;
   border-bottom: 1px solid #20344d;
 }
@@ -257,6 +254,10 @@ td {
   background: #8b2635;
   color: white;
 }
+
+#loginMsg {
+  color: #ff7184;
+}
 </style>
 </head>
 
@@ -270,7 +271,7 @@ td {
 <main>
 
 <section id="login" class="login">
-  <h2>🔐 Admin Login</h2>
+  <h2>🔐 ورود مدیر</h2>
 
   <input
     id="token"
@@ -313,7 +314,7 @@ td {
 
   <div class="panel">
 
-    <h2>🚫 Block IP</h2>
+    <h2>🚫 مسدود کردن IP</h2>
 
     <input
       id="blockIP"
@@ -332,7 +333,7 @@ td {
 
   <div class="panel">
 
-    <h2>Recent Security Events</h2>
+    <h2>🚨 Recent Security Events</h2>
 
     <table>
 
@@ -368,34 +369,45 @@ async function login() {
 
   auth = token;
 
-  const response = await fetch(
-    "/api/security/stats",
-    {
-      headers: {
-        Authorization: "Bearer " + auth
-      }
-    }
-  );
+  try {
 
-  if (!response.ok) {
+    const response = await fetch(
+      "/api/security/stats",
+      {
+        headers: {
+          Authorization: "Bearer " + auth
+        },
+        cache: "no-store"
+      }
+    );
+
+    if (!response.ok) {
+
+      document.getElementById("loginMsg").textContent =
+        "❌ توکن اشتباه است";
+
+      auth = "";
+
+      return;
+    }
+
+    document
+      .getElementById("login")
+      .classList.add("hidden");
+
+    document
+      .getElementById("dashboard")
+      .classList.remove("hidden");
+
+    loadData();
+
+  } catch (error) {
 
     document.getElementById("loginMsg").textContent =
-      "❌ توکن اشتباه است";
+      "❌ خطا در اتصال به سرور";
 
     auth = "";
-
-    return;
   }
-
-  document
-    .getElementById("login")
-    .classList.add("hidden");
-
-  document
-    .getElementById("dashboard")
-    .classList.remove("hidden");
-
-  loadData();
 }
 
 async function api(url, options = {}) {
@@ -404,6 +416,8 @@ async function api(url, options = {}) {
     ...(options.headers || {}),
     Authorization: "Bearer " + auth
   };
+
+  options.cache = "no-store";
 
   return fetch(url, options);
 }
@@ -440,13 +454,19 @@ async function loadData() {
     const tr =
       document.createElement("tr");
 
-    tr.innerHTML = \`
-      <td>\${escapeHTML(event.ip)}</td>
-      <td>\${escapeHTML(event.country)}</td>
-      <td>\${escapeHTML(event.path)}</td>
-      <td>\${escapeHTML(event.status)}</td>
-      <td>\${new Date(event.time).toLocaleString()}</td>
-    \`;
+    const values = [
+      event.ip,
+      event.country,
+      event.path,
+      event.status,
+      new Date(event.time).toLocaleString()
+    ];
+
+    for (const value of values) {
+      const td = document.createElement("td");
+      td.textContent = value ?? "";
+      tr.appendChild(td);
+    }
 
     tbody.appendChild(tr);
   }
@@ -479,16 +499,6 @@ async function block() {
     alert("IP blocked");
   }
 }
-
-function escapeHTML(value) {
-
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
 </script>
 
 </body>
@@ -509,7 +519,7 @@ export default {
     const country = getCountry(request);
 
     // =========================
-    // PRIVATE SECURITY DASHBOARD
+    // SECURITY DASHBOARD
     // =========================
 
     if (url.pathname === "/security") {
@@ -522,7 +532,7 @@ export default {
 
     if (url.pathname.startsWith("/api/security/")) {
 
-      if (!checkAdmin(request, env)) {
+      if (!checkAdmin(request)) {
         return json({
           error: "Unauthorized"
         }, 401);
@@ -605,6 +615,15 @@ export default {
         }
 
         const targetIP = body.ip;
+
+        if (
+          typeof targetIP !== "string" ||
+          !/^[0-9a-fA-F:.]+$/.test(targetIP)
+        ) {
+          return json({
+            error: "Invalid IP"
+          }, 400);
+        }
 
         await unblockIP(env, targetIP);
 
