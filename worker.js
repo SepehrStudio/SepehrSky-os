@@ -4,684 +4,1996 @@ const RATE_LIMIT = 120;
 const RATE_WINDOW_MS = 60_000;
 
 const suspiciousPatterns = [
-"/.env",
-"/.git/",
-"/wp-admin",
-"/wp-login",
-"/phpmyadmin",
-"/adminer",
-"/config.php",
-"/xmlrpc.php",
-"/.well-known/security.txt"
+  "/.env",
+  "/.git/",
+  "/wp-admin",
+  "/wp-login",
+  "/phpmyadmin",
+  "/adminer",
+  "/config.php",
+  "/xmlrpc.php",
+  "/.well-known/security.txt"
 ];
 
 const rateMap = new Map();
 
+
+// =========================
+// JSON RESPONSE
+// =========================
+
 function json(data, status = 200) {
-return new Response(JSON.stringify(data, null, 2), {
-status,
-headers: {
-"content-type": "application/json; charset=UTF-8",
-"cache-control": "no-store"
+  return new Response(
+    JSON.stringify(data, null, 2),
+    {
+      status,
+      headers: {
+        "content-type": "application/json; charset=UTF-8",
+        "cache-control": "no-store"
+      }
+    }
+  );
 }
-});
-}
+
+
+// =========================
+// IP
+// =========================
 
 function getIP(request) {
-return (
-request.headers.get("CF-Connecting-IP") ||
-request.headers.get("True-Client-IP") ||
-"unknown"
-);
+  return (
+    request.headers.get("CF-Connecting-IP") ||
+    request.headers.get("True-Client-IP") ||
+    "unknown"
+  );
 }
+
+
+// =========================
+// COUNTRY
+// =========================
 
 function getCountry(request) {
-return request.headers.get("CF-IPCountry") || "XX";
+  return (
+    request.headers.get("CF-IPCountry") ||
+    "XX"
+  );
 }
+
+
+// =========================
+// SUSPICIOUS PATH
+// =========================
 
 function isSuspicious(path) {
-const p = path.toLowerCase();
+  const p = path.toLowerCase();
 
-return suspiciousPatterns.some(pattern =>
-p.includes(pattern.toLowerCase())
-);
+  return suspiciousPatterns.some(
+    pattern =>
+      p.includes(pattern.toLowerCase())
+  );
 }
+
+
+// =========================
+// RATE LIMIT
+// =========================
 
 function rateLimited(ip) {
-const now = Date.now();
-const item = rateMap.get(ip);
 
-if (!item || now - item.start > RATE_WINDOW_MS) {
-rateMap.set(ip, {
-start: now,
-count: 1
-});
+  const now = Date.now();
 
-return false;
+  const item = rateMap.get(ip);
 
+  if (
+    !item ||
+    now - item.start > RATE_WINDOW_MS
+  ) {
+
+    rateMap.set(ip, {
+      start: now,
+      count: 1
+    });
+
+    return false;
+  }
+
+  item.count++;
+
+  return item.count > RATE_LIMIT;
 }
 
-item.count++;
 
-return item.count > RATE_LIMIT;
-}
+// =========================
+// CHECK BLOCK
+// =========================
 
 async function isBlocked(env, ip) {
-if (!env.SECURITY_KV || ip === "unknown") {
-return false;
+
+  if (
+    !env.SECURITY_KV ||
+    ip === "unknown"
+  ) {
+    return false;
+  }
+
+  const value =
+    await env.SECURITY_KV.get(
+      `block:${ip}`
+    );
+
+  return value === "1";
 }
 
-const value = await env.SECURITY_KV.get(block:${ip});
-return value === "1";
+
+// =========================
+// SAVE SECURITY EVENT
+// =========================
+
+async function saveSecurityEvent(
+  env,
+  event
+) {
+
+  if (!env.SECURITY_KV) {
+    return;
+  }
+
+  const id =
+    `${Date.now()}-${crypto.randomUUID()}`;
+
+  await env.SECURITY_KV.put(
+    `event:${id}`,
+    JSON.stringify(event),
+    {
+      expirationTtl:
+        60 * 60 * 24 * 7
+    }
+  );
 }
 
-async function saveSecurityEvent(env, event) {
-if (!env.SECURITY_KV) return;
 
-const id = ${Date.now()}-${crypto.randomUUID()};
-
-await env.SECURITY_KV.put(
-event:${id},
-JSON.stringify(event),
-{
-expirationTtl: 60 * 60 * 24 * 7
-}
-);
-}
+// =========================
+// BLOCK IP
+// =========================
 
 async function blockIP(env, ip) {
-if (!env.SECURITY_KV) {
-throw new Error("SECURITY_KV is not configured.");
+
+  if (!env.SECURITY_KV) {
+
+    throw new Error(
+      "SECURITY_KV is not configured."
+    );
+  }
+
+  await env.SECURITY_KV.put(
+    `block:${ip}`,
+    "1"
+  );
 }
 
-await env.SECURITY_KV.put(block:${ip}, "1");
-}
+
+// =========================
+// UNBLOCK IP
+// =========================
 
 async function unblockIP(env, ip) {
-if (!env.SECURITY_KV) {
-throw new Error("SECURITY_KV is not configured.");
+
+  if (!env.SECURITY_KV) {
+
+    throw new Error(
+      "SECURITY_KV is not configured."
+    );
+  }
+
+  await env.SECURITY_KV.delete(
+    `block:${ip}`
+  );
 }
 
-await env.SECURITY_KV.delete(block:${ip});
-}
+
+// =========================
+// LIST BLOCKED IPS
+// =========================
 
 async function listBlockedIPs(env) {
-if (!env.SECURITY_KV) return [];
 
-const result = await env.SECURITY_KV.list({
-prefix: "block:",
-limit: 100
-});
+  if (!env.SECURITY_KV) {
+    return [];
+  }
 
-return result.keys.map(k =>
-k.name.substring("block:".length)
-);
+  const result =
+    await env.SECURITY_KV.list({
+      prefix: "block:",
+      limit: 100
+    });
+
+  return result.keys.map(
+    key =>
+      key.name.substring(
+        "block:".length
+      )
+  );
 }
+
+
+// =========================
+// RECENT EVENTS
+// =========================
 
 async function getRecentEvents(env) {
-if (!env.SECURITY_KV) return [];
 
-const result = await env.SECURITY_KV.list({
-prefix: "event:",
-limit: 100
-});
+  if (!env.SECURITY_KV) {
+    return [];
+  }
 
-const events = [];
+  const result =
+    await env.SECURITY_KV.list({
+      prefix: "event:",
+      limit: 100
+    });
 
-for (const key of result.keys) {
-const value = await env.SECURITY_KV.get(key.name);
+  const events = [];
 
-if (!value) continue;  
+  for (const key of result.keys) {
 
-try {  
-  events.push(JSON.parse(value));  
-} catch {}
+    const value =
+      await env.SECURITY_KV.get(
+        key.name
+      );
 
+    if (!value) {
+      continue;
+    }
+
+    try {
+
+      events.push(
+        JSON.parse(value)
+      );
+
+    } catch {
+      // Ignore invalid event
+    }
+  }
+
+  events.sort(
+    (a, b) =>
+      (b.time || 0) -
+      (a.time || 0)
+  );
+
+  return events.slice(0, 50);
 }
 
-events.sort((a, b) => b.time - a.time);
 
-return events.slice(0, 50);
-}
+// =========================
+// ADMIN AUTH
+// =========================
 
 function checkAdmin(request) {
-const authorization = request.headers.get("Authorization") || "";
 
-return authorization === Bearer ${ADMIN_TOKEN};
+  const authorization =
+    request.headers.get(
+      "Authorization"
+    ) || "";
+
+  return (
+    authorization ===
+    `Bearer ${ADMIN_TOKEN}`
+  );
 }
 
+
+// =========================
+// VALID IP
+// =========================
+
+function validIP(ip) {
+
+  if (
+    typeof ip !== "string"
+  ) {
+    return false;
+  }
+
+  const value =
+    ip.trim();
+
+  if (
+    !value ||
+    value.length > 100
+  ) {
+    return false;
+  }
+
+  return /^[0-9a-fA-F:.]+$/.test(
+    value
+  );
+}
+
+
+// =========================
+// SECURITY DASHBOARD
+// =========================
+
 function securityDashboard() {
-return new Response(`<!doctype html>
 
-<html lang="fa" dir="rtl">  
-<head>  
-<meta charset="utf-8">  
-<meta name="viewport" content="width=device-width,initial-scale=1">  
-<title>SepehrSky Security</title>  <style>  
-* {  
-  box-sizing: border-box;  
-}  
-  
-body {  
-  margin: 0;  
-  font-family: Arial, sans-serif;  
-  background: #07111f;  
-  color: white;  
-}  
-  
-header {  
-  padding: 24px;  
-  background: #0c1b2e;  
-  border-bottom: 1px solid #20344d;  
-}  
-  
-h1 {  
-  margin: 0;  
-}  
-  
-main {  
-  max-width: 1100px;  
-  margin: auto;  
-  padding: 20px;  
-}  
-  
-.login,  
-.panel {  
-  background: #0c1b2e;  
-  border: 1px solid #20344d;  
-  border-radius: 18px;  
-  padding: 20px;  
-  margin-bottom: 20px;  
-}  
-  
-input {  
-  width: 100%;  
-  padding: 13px;  
-  margin: 8px 0;  
-  border-radius: 10px;  
-  border: 1px solid #304967;  
-  background: #07111f;  
-  color: white;  
-}  
-  
-button {  
-  border: 0;  
-  border-radius: 10px;  
-  padding: 12px 16px;  
-  cursor: pointer;  
-  margin: 5px;  
-}  
-  
-.grid {  
-  display: grid;  
-  grid-template-columns: repeat(auto-fit,minmax(180px,1fr));  
-  gap: 15px;  
-}  
-  
-.card {  
-  background: #101f33;  
-  border-radius: 15px;  
-  padding: 20px;  
-}  
-  
-.number {  
-  font-size: 30px;  
-  font-weight: bold;  
-  margin-top: 8px;  
-}  
-  
-table {  
-  width: 100%;  
-  border-collapse: collapse;  
-}  
-  
-th,  
-td {  
-  text-align: right;  
-  padding: 10px;  
-  border-bottom: 1px solid #20344d;  
-}  
-  
-.small {  
-  opacity: .7;  
-  font-size: 13px;  
-}  
-  
-.hidden {  
-  display: none;  
-}  
-  
-.danger {  
-  background: #8b2635;  
-  color: white;  
-}  
-  
-#loginMsg {  
-  color: #ff7184;  
-}  
-</style>  </head>  <body>  <header>  
-  <h1>🛡️ SepehrSky Security</h1>  
-  <div class="small">Private security dashboard</div>  
-</header>  <main>  <section id="login" class="login">  
-  <h2>🔐 ورود مدیر</h2>  <input
-id="token"
-type="password"
-placeholder="Admin token"
+  return new Response(
+`<!doctype html>
 
-> 
+<html lang="fa" dir="rtl">
 
-  <button onclick="login()">  
-    ورود  
-  </button>    <p id="loginMsg"></p>  
-</section>  <section id="dashboard" class="hidden">    <div class="grid">  <div class="card">  
-  👥 Requests  
-  <div id="requests" class="number">—</div>  
-</div>  
+<head>
 
-<div class="card">  
-  🌍 Countries  
-  <div id="countries" class="number">—</div>  
-</div>  
+<meta charset="utf-8">
 
-<div class="card">  
-  🚨 Suspicious  
-  <div id="suspicious" class="number">—</div>  
-</div>  
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+>
 
-<div class="card">  
-  🚫 Blocked  
-  <div id="blocked" class="number">—</div>  
+<title>SepehrSky Security</title>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #07111f;
+  color: white;
+}
+
+header {
+  padding: 24px;
+  background: #0c1b2e;
+  border-bottom: 1px solid #20344d;
+}
+
+h1 {
+  margin: 0;
+}
+
+main {
+  max-width: 1150px;
+  margin: auto;
+  padding: 20px;
+}
+
+.login,
+.panel {
+  background: #0c1b2e;
+  border: 1px solid #20344d;
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+input {
+  width: 100%;
+  padding: 13px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: 1px solid #304967;
+  background: #07111f;
+  color: white;
+  outline: none;
+}
+
+input:focus {
+  border-color: #4c91d9;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 16px;
+  cursor: pointer;
+  margin: 4px;
+  font-weight: bold;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit,minmax(180px,1fr));
+  gap: 15px;
+}
+
+.card {
+  background: #101f33;
+  border-radius: 15px;
+  padding: 20px;
+}
+
+.number {
+  font-size: 30px;
+  font-weight: bold;
+  margin-top: 8px;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 750px;
+}
+
+th,
+td {
+  text-align: right;
+  padding: 11px;
+  border-bottom: 1px solid #20344d;
+}
+
+th {
+  color: #8db7df;
+}
+
+.small {
+  opacity: .7;
+  font-size: 13px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.danger {
+  background: #8b2635;
+  color: white;
+}
+
+.success {
+  background: #16794b;
+  color: white;
+}
+
+.refresh {
+  background: #24486b;
+  color: white;
+}
+
+.status-normal {
+  color: #55e69b;
+  font-weight: bold;
+}
+
+.status-blocked {
+  color: #ff7184;
+  font-weight: bold;
+}
+
+.ip {
+  direction: ltr;
+  text-align: right;
+  font-family: monospace;
+}
+
+#loginMsg {
+  color: #ff7184;
+  min-height: 20px;
+}
+
+#toast {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: #10243b;
+  border: 1px solid #31506f;
+  padding: 14px 18px;
+  border-radius: 12px;
+  display: none;
+  z-index: 9999;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+<h1>🛡️ SepehrSky Security</h1>
+
+<div class="small">
+Private security dashboard
 </div>
 
-  </div>    <div class="panel">  <h2>🚫 مسدود کردن IP</h2>  
+</header>
 
-<input  
-  id="blockIP"  
-  placeholder="IP address"  
->  
+<main>
 
-<button class="danger" onclick="block()">  
-  Block  
-</button>  
+<section
+  id="login"
+  class="login"
+>
 
-<button onclick="loadData()">  
-  🔄 Refresh  
+<h2>🔐 ورود مدیر</h2>
+
+<form id="loginForm">
+
+<input
+  id="token"
+  type="password"
+  placeholder="Admin token"
+  autocomplete="off"
+>
+
+<button
+  id="loginButton"
+  type="submit"
+>
+🔐 ورود
 </button>
 
-  </div>    <div class="panel">  <h2>🚨 Recent Security Events</h2>  
+</form>
 
-<table>  
+<p id="loginMsg"></p>
 
-  <thead>  
-    <tr>  
-      <th>IP</th>  
-      <th>Country</th>  
-      <th>Path</th>  
-      <th>Status</th>  
-      <th>Time</th>  
-    </tr>  
-  </thead>  
+</section>
 
-  <tbody id="events"></tbody>  
+
+<section
+  id="dashboard"
+  class="hidden"
+>
+
+<div class="grid">
+
+<div class="card">
+
+👥 Requests
+
+<div
+  id="requests"
+  class="number"
+>
+—
+</div>
+
+</div>
+
+
+<div class="card">
+
+🌍 Countries
+
+<div
+  id="countries"
+  class="number"
+>
+—
+</div>
+
+</div>
+
+
+<div class="card">
+
+🚨 Suspicious
+
+<div
+  id="suspicious"
+  class="number"
+>
+—
+</div>
+
+</div>
+
+
+<div class="card">
+
+🚫 Blocked
+
+<div
+  id="blocked"
+  class="number"
+>
+—
+</div>
+
+</div>
+
+</div>
+
+
+<div class="panel">
+
+<h2>🚫 مدیریت IP</h2>
+
+<input
+  id="blockIP"
+  placeholder="IP address"
+  dir="ltr"
+  autocomplete="off"
+>
+
+<button
+  id="manualBlockButton"
+  class="danger"
+  type="button"
+>
+🚫 Block IP
+</button>
+
+<button
+  id="refreshButton"
+  class="refresh"
+  type="button"
+>
+🔄 Refresh
+</button>
+
+</div>
+
+
+<div class="panel">
+
+<h2>🌐 IP Security List</h2>
+
+<div class="small">
+از این قسمت می‌توانی IPهای ثبت‌شده را مدیریت کنی.
+</div>
+
+<br>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>IP</th>
+<th>Country</th>
+<th>Status</th>
+<th>Action</th>
+
+</tr>
+
+</thead>
+
+<tbody id="ipTable"></tbody>
 
 </table>
 
-  </div>  </section>  </main>  <script>  
-let auth = "";  
-  
-async function login() {  
-  
-  const token =  
-    document.getElementById("token").value.trim();  
-  
-  if (!token) return;  
-  
-  auth = token;  
-  
-  try {  
-  
-    const response = await fetch(  
-      "/api/security/stats",  
-      {  
-        headers: {  
-          Authorization: "Bearer " + auth  
-        },  
-        cache: "no-store"  
-      }  
-    );  
-  
-    if (!response.ok) {  
-  
-      document.getElementById("loginMsg").textContent =  
-        "❌ توکن اشتباه است";  
-  
-      auth = "";  
-  
-      return;  
-    }  
-  
-    document  
-      .getElementById("login")  
-      .classList.add("hidden");  
-  
-    document  
-      .getElementById("dashboard")  
-      .classList.remove("hidden");  
-  
-    loadData();  
-  
-  } catch (error) {  
-  
-    document.getElementById("loginMsg").textContent =  
-      "❌ خطا در اتصال به سرور";  
-  
-    auth = "";  
-  }  
-}  
-  
-async function api(url, options = {}) {  
-  
-  options.headers = {  
-    ...(options.headers || {}),  
-    Authorization: "Bearer " + auth  
-  };  
-  
-  options.cache = "no-store";  
-  
-  return fetch(url, options);  
-}  
-  
-async function loadData() {  
-  
-  const response =  
-    await api("/api/security/stats");  
-  
-  if (!response.ok) return;  
-  
-  const data =  
-    await response.json();  
-  
-  document.getElementById("requests")  
-    .textContent = data.requests;  
-  
-  document.getElementById("countries")  
-    .textContent = data.countries;  
-  
-  document.getElementById("suspicious")  
-    .textContent = data.suspicious;  
-  
-  document.getElementById("blocked")  
-    .textContent = data.blocked;  
-  
-  const tbody =  
-    document.getElementById("events");  
-  
-  tbody.innerHTML = "";  
-  
-  for (const event of data.events) {  
-  
-    const tr =  
-      document.createElement("tr");  
-  
-    const values = [  
-      event.ip,  
-      event.country,  
-      event.path,  
-      event.status,  
-      new Date(event.time).toLocaleString()  
-    ];  
-  
-    for (const value of values) {  
-      const td = document.createElement("td");  
-      td.textContent = value ?? "";  
-      tr.appendChild(td);  
-    }  
-  
-    tbody.appendChild(tr);  
-  }  
-}  
-  
-async function block() {  
-  
-  const ip =  
-    document.getElementById("blockIP")  
-      .value.trim();  
-  
-  if (!ip) return;  
-  
-  const response =  
-    await api("/api/security/block", {  
-      method: "POST",  
-      headers: {  
-        "Content-Type": "application/json"  
-      },  
-      body: JSON.stringify({ ip })  
-    });  
-  
-  if (response.ok) {  
-  
-    document.getElementById("blockIP")  
-      .value = "";  
-  
-    loadData();  
-  
-    alert("IP blocked");  
-  }  
-}  
-</script>  </body>  
-</html>`, {  
-    headers: {  
-      "content-type": "text/html; charset=UTF-8",  
-      "cache-control": "no-store"  
-    }  
-  });  
-}  export default {
+</div>
 
-async fetch(request, env) {
+</div>
 
-const url = new URL(request.url);  
-const ip = getIP(request);  
-const country = getCountry(request);  
 
-// =========================  
-// SECURITY DASHBOARD  
-// =========================  
+<div class="panel">
 
-if (url.pathname === "/security") {  
-  return securityDashboard();  
-}  
+<h2>🚨 Recent Security Events</h2>
 
-// =========================  
-// ADMIN API  
-// =========================  
+<div class="table-wrap">
 
-if (url.pathname.startsWith("/api/security/")) {  
+<table>
 
-  if (!checkAdmin(request)) {  
-    return json({  
-      error: "Unauthorized"  
-    }, 401);  
-  }  
+<thead>
 
-  if (url.pathname === "/api/security/stats") {  
+<tr>
 
-    const events =  
-      await getRecentEvents(env);  
+<th>IP</th>
+<th>Country</th>
+<th>Path</th>
+<th>Status</th>
+<th>Time</th>
 
-    const blocked =  
-      await listBlockedIPs(env);  
+</tr>
 
-    const countries =  
-      new Set(  
-        events.map(e => e.country)  
-      );  
+</thead>
 
-    const suspicious =  
-      events.filter(  
-        e => e.suspicious  
-      );  
+<tbody id="events"></tbody>
 
-    return json({  
-      requests: events.length,  
-      countries: countries.size,  
-      suspicious: suspicious.length,  
-      blocked: blocked.length,  
-      events  
-    });  
-  }  
+</table>
 
-  if (  
-    url.pathname === "/api/security/block" &&  
-    request.method === "POST"  
-  ) {  
+</div>
 
-    let body;  
+</div>
 
-    try {  
-      body = await request.json();  
-    } catch {  
-      return json({  
-        error: "Invalid JSON"  
-      }, 400);  
-    }  
+</section>
 
-    const targetIP = body.ip;  
+</main>
 
-    if (  
-      typeof targetIP !== "string" ||  
-      !/^[0-9a-fA-F:.]+$/.test(targetIP)  
-    ) {  
-      return json({  
-        error: "Invalid IP"  
-      }, 400);  
-    }  
+<div id="toast"></div>
 
-    await blockIP(env, targetIP);  
 
-    return json({  
-      success: true,  
-      blocked: targetIP  
-    });  
-  }  
+<script>
 
-  if (  
-    url.pathname === "/api/security/unblock" &&  
-    request.method === "POST"  
-  ) {  
+let auth = "";
 
-    let body;  
 
-    try {  
-      body = await request.json();  
-    } catch {  
-      return json({  
-        error: "Invalid JSON"  
-      }, 400);  
-    }  
+function showToast(message) {
 
-    const targetIP = body.ip;  
+  const toast =
+    document.getElementById(
+      "toast"
+    );
 
-    if (  
-      typeof targetIP !== "string" ||  
-      !/^[0-9a-fA-F:.]+$/.test(targetIP)  
-    ) {  
-      return json({  
-        error: "Invalid IP"  
-      }, 400);  
-    }  
+  toast.textContent =
+    message;
 
-    await unblockIP(env, targetIP);  
+  toast.style.display =
+    "block";
 
-    return json({  
-      success: true  
-    });  
-  }  
+  setTimeout(() => {
 
-  return json({  
-    error: "Not found"  
-  }, 404);  
-}  
+    toast.style.display =
+      "none";
 
-// =========================  
-// BLOCKED IP  
-// =========================  
+  }, 2500);
+}
 
-if (await isBlocked(env, ip)) {  
 
-  return new Response(  
-    "Access denied.",  
-    {  
-      status: 403,  
-      headers: {  
-        "content-type": "text/plain; charset=UTF-8",  
-        "cache-control": "no-store"  
-      }  
-    }  
-  );  
-}  
+// =========================
+// LOGIN
+// =========================
 
-// =========================  
-// RATE LIMIT  
-// =========================  
+async function login() {
 
-if (rateLimited(ip)) {  
+  const token =
+    document
+      .getElementById("token")
+      .value
+      .trim();
 
-  await saveSecurityEvent(env, {  
-    time: Date.now(),  
-    ip,  
-    country,  
-    path: url.pathname,  
-    method: request.method,  
-    suspicious: true,  
-    status: "RATE_LIMITED"  
-  });  
+  const msg =
+    document.getElementById(
+      "loginMsg"
+    );
 
-  return new Response(  
-    "Too many requests.",  
-    {  
-      status: 429,  
-      headers: {  
-        "retry-after": "60"  
-      }  
-    }  
-  );  
-}  
+  const button =
+    document.getElementById(
+      "loginButton"
+    );
 
-// =========================  
-// SUSPICIOUS REQUEST  
-// =========================  
+  if (!token) {
 
-const suspicious =  
-  isSuspicious(url.pathname);  
+    msg.textContent =
+      "⚠️ توکن را وارد کن";
 
-if (suspicious) {  
+    return;
+  }
 
-  await saveSecurityEvent(env, {  
-    time: Date.now(),  
-    ip,  
-    country,  
-    path: url.pathname,  
-    method: request.method,  
-    suspicious: true,  
-    status: "SUSPICIOUS"  
-  });  
+  button.disabled =
+    true;
 
-  return new Response(  
-    "Request blocked.",  
-    {  
-      status: 403,  
-      headers: {  
-        "cache-control": "no-store"  
-      }  
-    }  
-  );  
-}  
+  button.textContent =
+    "⏳ در حال بررسی...";
 
-// =========================  
-// NORMAL REQUEST  
-// =========================  
+  msg.textContent = "";
 
-return env.ASSETS.fetch(request);
+  try {
+
+    const response =
+      await fetch(
+        "/api/security/stats?t=" +
+        Date.now(),
+        {
+          method: "GET",
+
+          headers: {
+            "Authorization":
+              "Bearer " + token,
+
+            "Cache-Control":
+              "no-cache"
+          },
+
+          cache: "no-store"
+        }
+      );
+
+
+    if (!response.ok) {
+
+      if (
+        response.status === 401
+      ) {
+
+        msg.textContent =
+          "❌ توکن اشتباه است";
+
+      } else {
+
+        msg.textContent =
+          "❌ خطای سرور: " +
+          response.status;
+
+      }
+
+      auth = "";
+
+      return;
+    }
+
+
+    const data =
+      await response.json();
+
+
+    if (
+      !data ||
+      typeof data !== "object"
+    ) {
+
+      msg.textContent =
+        "❌ پاسخ نامعتبر از سرور";
+
+      return;
+    }
+
+
+    auth = token;
+
+
+    document
+      .getElementById("login")
+      .classList
+      .add("hidden");
+
+
+    document
+      .getElementById("dashboard")
+      .classList
+      .remove("hidden");
+
+
+    await loadData();
+
+  } catch (error) {
+
+    console.error(error);
+
+    msg.textContent =
+      "❌ خطا در اتصال به Worker";
+
+    auth = "";
+
+  } finally {
+
+    button.disabled =
+      false;
+
+    button.textContent =
+      "🔐 ورود";
+
+  }
 
 }
+
+
+// مهم:
+// ورود با Enter هم کار می‌کند.
+
+document
+  .getElementById("loginForm")
+  .addEventListener(
+    "submit",
+    function(event) {
+
+      event.preventDefault();
+
+      login();
+
+    }
+  );
+
+
+// =========================
+// API
+// =========================
+
+async function api(
+  url,
+  options = {}
+) {
+
+  options.headers = {
+    ...(options.headers || {}),
+
+    "Authorization":
+      "Bearer " + auth
+  };
+
+  options.cache =
+    "no-store";
+
+  return fetch(
+    url,
+    options
+  );
+}
+
+
+// =========================
+// LOAD DATA
+// =========================
+
+async function loadData() {
+
+  try {
+
+    const response =
+      await api(
+        "/api/security/stats?t=" +
+        Date.now()
+      );
+
+
+    if (
+      response.status === 401
+    ) {
+
+      auth = "";
+
+      document
+        .getElementById("dashboard")
+        .classList
+        .add("hidden");
+
+      document
+        .getElementById("login")
+        .classList
+        .remove("hidden");
+
+      document
+        .getElementById("loginMsg")
+        .textContent =
+          "❌ نشست مدیر معتبر نیست";
+
+      return;
+    }
+
+
+    if (!response.ok) {
+
+      showToast(
+        "❌ دریافت اطلاعات ناموفق بود"
+      );
+
+      return;
+    }
+
+
+    const data =
+      await response.json();
+
+
+    document
+      .getElementById("requests")
+      .textContent =
+        data.requests ?? 0;
+
+
+    document
+      .getElementById("countries")
+      .textContent =
+        data.countries ?? 0;
+
+
+    document
+      .getElementById("suspicious")
+      .textContent =
+        data.suspicious ?? 0;
+
+
+    document
+      .getElementById("blocked")
+      .textContent =
+        data.blocked ?? 0;
+
+
+    const events =
+      Array.isArray(data.events)
+        ? data.events
+        : [];
+
+
+    const blockedIPs =
+      Array.isArray(data.blockedIPs)
+        ? data.blockedIPs
+        : [];
+
+
+    const blockedSet =
+      new Set(blockedIPs);
+
+
+    // =========================
+    // IP LIST
+    // =========================
+
+    const ipMap =
+      new Map();
+
+
+    for (
+      const event of events
+    ) {
+
+      if (!event.ip) {
+        continue;
+      }
+
+      if (
+        !ipMap.has(event.ip)
+      ) {
+
+        ipMap.set(
+          event.ip,
+          event
+        );
+
+      }
+
+    }
+
+
+    for (
+      const ip of blockedIPs
+    ) {
+
+      if (
+        !ipMap.has(ip)
+      ) {
+
+        ipMap.set(
+          ip,
+          {
+            ip: ip,
+            country: "—"
+          }
+        );
+
+      }
+
+    }
+
+
+    const ipTable =
+      document
+        .getElementById(
+          "ipTable"
+        );
+
+
+    ipTable.innerHTML =
+      "";
+
+
+    if (
+      ipMap.size === 0
+    ) {
+
+      const tr =
+        document.createElement(
+          "tr"
+        );
+
+      const td =
+        document.createElement(
+          "td"
+        );
+
+      td.colSpan = 4;
+
+      td.textContent =
+        "هنوز IP ثبت‌شده‌ای وجود ندارد.";
+
+      tr.appendChild(td);
+
+      ipTable.appendChild(tr);
+
+    } else {
+
+      for (
+        const [ip, event]
+        of ipMap
+      ) {
+
+        const tr =
+          document.createElement(
+            "tr"
+          );
+
+
+        const ipTD =
+          document.createElement(
+            "td"
+          );
+
+        ipTD.textContent =
+          ip;
+
+        ipTD.className =
+          "ip";
+
+
+        const countryTD =
+          document.createElement(
+            "td"
+          );
+
+        countryTD.textContent =
+          event.country ||
+          "XX";
+
+
+        const statusTD =
+          document.createElement(
+            "td"
+          );
+
+
+        const actionTD =
+          document.createElement(
+            "td"
+          );
+
+
+        if (
+          blockedSet.has(ip)
+        ) {
+
+          statusTD.textContent =
+            "🚫 Blocked";
+
+          statusTD.className =
+            "status-blocked";
+
+
+          const button =
+            document.createElement(
+              "button"
+            );
+
+          button.type =
+            "button";
+
+          button.className =
+            "success";
+
+          button.textContent =
+            "🟢 Unblock";
+
+          button.addEventListener(
+            "click",
+            () => unblockIP(ip)
+          );
+
+          actionTD.appendChild(
+            button
+          );
+
+        } else {
+
+          statusTD.textContent =
+            "🟢 Normal";
+
+          statusTD.className =
+            "status-normal";
+
+
+          const button =
+            document.createElement(
+              "button"
+            );
+
+          button.type =
+            "button";
+
+          button.className =
+            "danger";
+
+          button.textContent =
+            "🚫 Block";
+
+          button.addEventListener(
+            "click",
+            () => blockIP(ip)
+          );
+
+          actionTD.appendChild(
+            button
+          );
+
+        }
+
+
+        tr.appendChild(
+          ipTD
+        );
+
+        tr.appendChild(
+          countryTD
+        );
+
+        tr.appendChild(
+          statusTD
+        );
+
+        tr.appendChild(
+          actionTD
+        );
+
+
+        ipTable.appendChild(
+          tr
+        );
+
+      }
+
+    }
+
+
+    // =========================
+    // EVENTS
+    // =========================
+
+    const eventsBody =
+      document
+        .getElementById(
+          "events"
+        );
+
+
+    eventsBody.innerHTML =
+      "";
+
+
+    if (
+      events.length === 0
+    ) {
+
+      const tr =
+        document.createElement(
+          "tr"
+        );
+
+      const td =
+        document.createElement(
+          "td"
+        );
+
+      td.colSpan = 5;
+
+      td.textContent =
+        "هنوز رویداد امنیتی ثبت نشده است.";
+
+      tr.appendChild(td);
+
+      eventsBody.appendChild(
+        tr
+      );
+
+    } else {
+
+      for (
+        const event of events
+      ) {
+
+        const tr =
+          document.createElement(
+            "tr"
+          );
+
+
+        const values = [
+
+          event.ip,
+
+          event.country,
+
+          event.path,
+
+          event.status,
+
+          event.time
+            ? new Date(
+                event.time
+              ).toLocaleString()
+            : ""
+
+        ];
+
+
+        for (
+          const value of values
+        ) {
+
+          const td =
+            document.createElement(
+              "td"
+            );
+
+          td.textContent =
+            value ?? "";
+
+          tr.appendChild(td);
+
+        }
+
+
+        eventsBody.appendChild(
+          tr
+        );
+
+      }
+
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast(
+      "❌ خطا در دریافت اطلاعات"
+    );
+
+  }
+
+}
+
+
+// =========================
+// BLOCK
+// =========================
+
+async function blockIP(ip) {
+
+  if (!ip) {
+    return;
+  }
+
+
+  if (
+    !confirm(
+      "آیا مطمئنی می‌خواهی این IP مسدود شود؟\\n\\n" +
+      ip
+    )
+  ) {
+
+    return;
+  }
+
+
+  try {
+
+    const response =
+      await api(
+        "/api/security/block",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              ip: ip
+            })
+        }
+      );
+
+
+    if (response.ok) {
+
+      showToast(
+        "🚫 IP مسدود شد"
+      );
+
+      await loadData();
+
+    } else {
+
+      showToast(
+        "❌ Block ناموفق بود"
+      );
+
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast(
+      "❌ خطا در Block کردن IP"
+    );
+
+  }
+
+}
+
+
+// =========================
+// UNBLOCK
+// =========================
+
+async function unblockIP(ip) {
+
+  if (!ip) {
+    return;
+  }
+
+
+  if (
+    !confirm(
+      "آیا می‌خواهی این IP آزاد شود؟\\n\\n" +
+      ip
+    )
+  ) {
+
+    return;
+  }
+
+
+  try {
+
+    const response =
+      await api(
+        "/api/security/unblock",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              ip: ip
+            })
+        }
+      );
+
+
+    if (response.ok) {
+
+      showToast(
+        "🟢 IP آزاد شد"
+      );
+
+      await loadData();
+
+    } else {
+
+      showToast(
+        "❌ Unblock ناموفق بود"
+      );
+
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast(
+      "❌ خطا در Unblock کردن IP"
+    );
+
+  }
+
+}
+
+
+// =========================
+// MANUAL BLOCK
+// =========================
+
+async function blockManual() {
+
+  const input =
+    document.getElementById(
+      "blockIP"
+    );
+
+  const ip =
+    input.value.trim();
+
+
+  if (!validIPClient(ip)) {
+
+    showToast(
+      "⚠️ IP معتبر وارد کن"
+    );
+
+    return;
+  }
+
+
+  await blockIP(ip);
+
+  input.value = "";
+
+}
+
+
+function validIPClient(ip) {
+
+  if (!ip) {
+    return false;
+  }
+
+  if (ip.length > 100) {
+    return false;
+  }
+
+  return /^[0-9a-fA-F:.]+$/.test(
+    ip
+  );
+
+}
+
+
+document
+  .getElementById(
+    "manualBlockButton"
+  )
+  .addEventListener(
+    "click",
+    blockManual
+  );
+
+
+document
+  .getElementById(
+    "refreshButton"
+  )
+  .addEventListener(
+    "click",
+    loadData
+  );
+
+</script>
+
+</body>
+
+</html>`,
+    {
+      headers: {
+        "content-type":
+          "text/html; charset=UTF-8",
+
+        "cache-control":
+          "no-store"
+      }
+    }
+  );
+}
+
+
+// =========================
+// WORKER
+// =========================
+
+export default {
+
+  async fetch(
+    request,
+    env
+  ) {
+
+    const url =
+      new URL(request.url);
+
+    const ip =
+      getIP(request);
+
+    const country =
+      getCountry(request);
+
+
+    // =========================
+    // SECURITY DASHBOARD
+    // =========================
+
+    if (
+      url.pathname ===
+      "/security"
+    ) {
+
+      return securityDashboard();
+
+    }
+
+
+    // =========================
+    // ADMIN API
+    // =========================
+
+    if (
+      url.pathname.startsWith(
+        "/api/security/"
+      )
+    ) {
+
+      if (
+        !checkAdmin(request)
+      ) {
+
+        return json(
+          {
+            error:
+              "Unauthorized"
+          },
+          401
+        );
+
+      }
+
+
+      // =========================
+      // STATS
+      // =========================
+
+      if (
+        url.pathname ===
+          "/api/security/stats" &&
+        request.method === "GET"
+      ) {
+
+        const events =
+          await getRecentEvents(
+            env
+          );
+
+
+        const blocked =
+          await listBlockedIPs(
+            env
+          );
+
+
+        const countries =
+          new Set(
+            events
+              .map(
+                event =>
+                  event.country
+              )
+              .filter(Boolean)
+          );
+
+
+        const suspicious =
+          events.filter(
+            event =>
+              event.suspicious
+          );
+
+
+        return json({
+
+          requests:
+            events.length,
+
+          countries:
+            countries.size,
+
+          suspicious:
+            suspicious.length,
+
+          blocked:
+            blocked.length,
+
+          blockedIPs:
+            blocked,
+
+          events
+
+        });
+
+      }
+
+
+      // =========================
+      // BLOCK API
+      // =========================
+
+      if (
+        url.pathname ===
+          "/api/security/block" &&
+        request.method === "POST"
+      ) {
+
+        let body;
+
+        try {
+
+          body =
+            await request.json();
+
+        } catch {
+
+          return json(
+            {
+              error:
+                "Invalid JSON"
+            },
+            400
+          );
+
+        }
+
+
+        const targetIP =
+          typeof body.ip === "string"
+            ? body.ip.trim()
+            : "";
+
+
+        if (
+          !validIP(targetIP)
+        ) {
+
+          return json(
+            {
+              error:
+                "Invalid IP"
+            },
+            400
+          );
+
+        }
+
+
+        try {
+
+          await blockIP(
+            env,
+            targetIP
+          );
+
+        } catch (error) {
+
+          return json(
+            {
+              error:
+                error.message ||
+                "KV error"
+            },
+            500
+          );
+
+        }
+
+
+        return json({
+          success: true,
+          blocked: targetIP
+        });
+
+      }
+
+
+      // =========================
+      // UNBLOCK API
+      // =========================
+
+      if (
+        url.pathname ===
+          "/api/security/unblock" &&
+        request.method === "POST"
+      ) {
+
+        let body;
+
+        try {
+
+          body =
+            await request.json();
+
+        } catch {
+
+          return json(
+            {
+              error:
+                "Invalid JSON"
+            },
+            400
+          );
+
+        }
+
+
+        const targetIP =
+          typeof body.ip === "string"
+            ? body.ip.trim()
+            : "";
+
+
+        if (
+          !validIP(targetIP)
+        ) {
+
+          return json(
+            {
+              error:
+                "Invalid IP"
+            },
+            400
+          );
+
+        }
+
+
+        try {
+
+          await unblockIP(
+            env,
+            targetIP
+          );
+
+        } catch (error) {
+
+          return json(
+            {
+              error:
+                error.message ||
+                "KV error"
+            },
+            500
+          );
+
+        }
+
+
+        return json({
+          success: true,
+          unblocked: targetIP
+        });
+
+      }
+
+
+      return json(
+        {
+          error:
+            "Not found"
+        },
+        404
+      );
+
+    }
+
+
+    // =========================
+    // BLOCKED IP
+    // =========================
+
+    if (
+      await isBlocked(
+        env,
+        ip
+      )
+    ) {
+
+      return new Response(
+        "Access denied.",
+        {
+          status: 403,
+
+          headers: {
+            "content-type":
+              "text/plain; charset=UTF-8",
+
+            "cache-control":
+              "no-store"
+          }
+        }
+      );
+
+    }
+
+
+    // =========================
+    // RATE LIMIT
+    // =========================
+
+    if (
+      rateLimited(ip)
+    ) {
+
+      await saveSecurityEvent(
+        env,
+        {
+          time: Date.now(),
+          ip: ip,
+          country: country,
+          path: url.pathname,
+          method: request.method,
+          suspicious: true,
+          status: "RATE_LIMITED"
+        }
+      );
+
+
+      return new Response(
+        "Too many requests.",
+        {
+          status: 429,
+
+          headers: {
+            "retry-after":
+              "60"
+          }
+        }
+      );
+
+    }
+
+
+    // =========================
+    // SUSPICIOUS REQUEST
+    // =========================
+
+    const suspicious =
+      isSuspicious(
+        url.pathname
+      );
+
+
+    if (suspicious) {
+
+      await saveSecurityEvent(
+        env,
+        {
+          time: Date.now(),
+          ip: ip,
+          country: country,
+          path: url.pathname,
+          method: request.method,
+          suspicious: true,
+          status: "SUSPICIOUS"
+        }
+      );
+
+
+      return new Response(
+        "Request blocked.",
+        {
+          status: 403,
+
+          headers: {
+            "cache-control":
+              "no-store"
+          }
+        }
+      );
+
+    }
+
+
+    // =========================
+    // NORMAL REQUEST
+    // =========================
+
+    return env.ASSETS.fetch(
+      request
+    );
+
+  }
+
 };
