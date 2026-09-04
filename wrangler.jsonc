@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sepehrsky-os",
+  "compatibility_date": "2026-09-03",
+
+  "observability": {
+    "enabled": true
+  },
+
+  "assets": {
+    "directory": "."
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "SECURITY_KV",
+      "id": "03736cda39b14fce8f10cc8273e50c15"
+    }
+  ]
+}
