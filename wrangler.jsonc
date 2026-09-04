@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sepehrsky-os",
+  "main": "./worker.js",
   "compatibility_date": "2026-09-03",
 
   "observability": {
@@ -8,7 +9,9 @@
   },
 
   "assets": {
-    "directory": "."
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": true
   },
 
   "kv_namespaces": [
